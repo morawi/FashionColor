@@ -73,9 +73,10 @@ class ImageDataset(Dataset):
             labels.append(self.class_name[obj_ids[i]])
                               
         image_id = index
+        fname = self.files_A[index % len(self.files_A)][-8:-4]
           
         
-        return image_A, masked_img, labels, image_id, masks
+        return image_A, masked_img, labels, image_id, masks, fname
      
 
     def __len__(self): # this function returns the length of the dataset, the source might not equal the target if the data is unaligned

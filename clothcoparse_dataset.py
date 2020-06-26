@@ -14,7 +14,7 @@ import torch
 def get_clothCoParse_class_names(): 
     # names ordered according to label id, 0 for background and 59 for wedges
     
-    ClothCoParse_class_names = ['background',  'accessories',  'bag',  'belt',  'blazer',
+    class_names = ['background',  'accessories',  'bag',  'belt',  'blazer',
  'blouse',  'bodysuit',  'boots',  'bra',  'bracelet',  'cape',  'cardigan',
  'clogs', 'coat',  'dress', 'earrings', 'flats', 'glasses', 'gloves', 'hair',
  'hat', 'heels', 'hoodie', 'intimate', 'jacket', 'jeans', 'jumper', 'leggings',
@@ -23,21 +23,11 @@ def get_clothCoParse_class_names():
  'socks', 'stockings', 'suit', 'sunglasses', 'sweater', 'sweatshirt', 'swimwear',
  't-shirt', 'tie', 'tights', 'top', 'vest', 'wallet', 'watch', 'wedges']
     
-    return ClothCoParse_class_names
+    return class_names
         
 
 class ImageDataset(Dataset):
-    def __init__(self, root, transforms_=None, transforms_target=None,
-                 mode="train", person_detection=False,
-                 HPC_run=False, remove_background=True,
-                 ):
-       
-        if transforms_ != None:
-            self.transforms = transforms.Compose(transforms_) # image transform
-        else: self.transforms=None
-        if transforms_target != None:
-            self.transforms_target = transforms.Compose(transforms_target) # image transform
-        else: self.transforms_target=None
+    def __init__(self, root, mode="train",  HPC_run=False):
         
         self.class_name = get_clothCoParse_class_names()
         
@@ -48,10 +38,7 @@ class ImageDataset(Dataset):
         self.files_B = sorted(glob.glob(os.path.join(root, "%s/B" % mode) + "/*.*")) # get the target image file-names
         
     def number_of_classes(self, opt):
-        if opt.person_detection:
-            return 2
-        else:
-            return(len(get_clothCoParse_class_names())) # this should do
+        return(len(get_clothCoParse_class_names())) # this should do
   
 
     def __getitem__(self, index):              

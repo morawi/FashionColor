@@ -6,6 +6,12 @@ Created on Sun Apr 19 21:34:04 2020
 
 Dataset class for Modanet dataset
 
+
+
+VIMP:  Error Error Error
+    This class, for some reason, is corrupting matplotlib, not sure which 
+package has a conflict wiht matplotlib!
+
 """
 
 
@@ -16,21 +22,6 @@ import numpy as np
 import torch
 from pycocotools.coco import COCO
 
-# idx_with_no_annotations = [12839, 12840, 12929, 12937, 12942, 13110, 13207 ,13214 ,18866 ,
-#     18950 ,18978 ,18979 ,19023 ,19024 ,19062 ,19078 ,19107 ,19139 ,
-#     19143 ,19193 ,19197 ,19214 ,23715 ,23742 ,23755 ,23880 ,24089 ,
-#     24238 ,24284 ,24372 ,24483 ,24657 ,24786 ,24959 ,25094 ,25149 ,
-#     25300 ,25323 ,25356 ,25413 ,25426 ,25651 ,25703 ,25734 ,25777 ,
-#     25915 ,25940 ,26143 ,26177 ,26252 ,26285 ,26327 ,26341 ,26522 ,
-#     26597 ,26705 ,26802 ,26900 ,27041 ,27043 ,27087 ,27112 ,27122 ,
-#     27338 ,27360 ,27364 ,27384 ,27427 ,27440 ,27472 ,27542 ,27798 ,
-#     27800 ,27826 ,28081 ,28230 ,28503 ,28557 ,28595 ,28667 ,28669 ,
-#     28858 ,28899 ,29027 ,29348 ,35490 ,35539 ,35542 ,35546 ,35576 ,
-#     35657 ,35679 ,35711 ,35770 ,35909 ,35971 ,35989 ,36011 ,36014 ,
-#     36080 ,36123 ,36139 ,36149 ,36150 ,36199 ,36208 ,36211 ,36352 ,
-#     36361 ,36385 ,36408 ,36444 ,36456 ,36468 ,36514 ,36522 ,36570 ,
-#     36576 ,36592 ,36624 ,36644 ,36728 ,36754]
-# wrong
 
 idx_with_no_annotations= [1365 ,1388 ,453445 ,456009 ,456939 ,1089041,461792,462919,
  372190 ,375419,376816 ,376893 ,379849 ,379885 ,382041 ,382689 ,384182 ,385450 ,385655 ,
@@ -133,12 +124,6 @@ class ModanetDataset(Dataset):
     def number_of_classes(self, opt):
         return(len(self.cat_names)+1) # this should do
 
-# transforms_ = [
-#     transforms.Resize((300, 300), Image.BICUBIC),
-#     transforms.ToTensor(),
-#     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-# ]
-
 # x_data = ModanetDataset(transforms_=None)
 # # im, tg = x_data[0] # [12839]
 # for idx in range(len(x_data)):
@@ -146,11 +131,5 @@ class ModanetDataset(Dataset):
 #     x_data[idx]
     
     
-'''  used to remove problematic samples
-    # if image_A.mode !='RGB': # num_objs<1
-        #     print(img_file['id'],',', end='')            
-        # return 
-
-'''
 
 

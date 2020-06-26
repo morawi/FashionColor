@@ -8,34 +8,40 @@ Created on Mon Jun 15 16:44:59 2020
 import numpy as np
 from sklearn.cluster import KMeans
 from collections import Counter
+# import matplotlib
+# matplotlib.use("TkAgg")
+# backend string are ['GTK3Agg', 'GTK3Cairo', 'MacOSX', 'nbAgg', 'Qt4Agg', 
+# 'Qt4Cairo', 'Qt5Agg', 'Qt5Cairo', 'TkAgg', 'TkCairo', 'WebAgg', 'WX', 'WXAgg',
+# 'WXCairo', 'agg', 'cairo', 'pdf', 'pgf', 'ps', 'svg', 'template']
 import matplotlib.pyplot as plt
 from PIL import Image
-from color_utils import merge_clusters, RGB2HEX
+from color_utils import merge_clusters
  
 
 
-
+def RGB2HEX(rgb):
+    return "#{:02x}{:02x}{:02x}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
 
 class ColorExtractor():
     ''' Extracts the colors of one person fashion items/clothing'''
-    def __init__(self, image, masks, labels, masked_img, cnf):
-                                                       
-        # inputed
+    def __init__(self, image, masks, labels, masked_img, method='3D_1D', 
+                 number_of_colors = 16, max_num_colors = 1, use_quantize=False):
+        ''' Extracts the colors of one person fashion items/clothing'''
+        # inputed        
+        self.number_of_colors = number_of_colors
+        self.max_num_colors = max_num_colors
         self.labels = labels     
-        self.number_of_colors = cnf.num_colors
-        self.max_num_colors = cnf.max_num_colors
         
-        # computed
+        # computed values
         self.top_k_colors=[]
-        self.colors_centers = []                     
+        # self.colors_centers = []                     
                 
-        if cnf.method == '3D_1D':
-            self.find_colors_via_clustering_3D_1D_cntPix(masks, masked_img, 
-                                                         cnf.number_of_colors, 
-                                                         cnf.max_num_colors)
-        elif cnf.method == '3D':              
-            self.find_colors_via_clustering_3D_1D(masks, masked_img, cnf.number_of_colors, 
-                                            cnf.max_num_colors, use_quantize=cnf.use_quantize)
+        
+        if method == '3D_1D':
+            self.find_colors_via_clustering_3D_1D_cntPix(masks, masked_img)
+        elif method == '3D':              
+            self.find_colors_via_clustering_3D(masks, masked_img, 
+                                                  use_quantize= use_quantize)
        
 
 
@@ -75,7 +81,7 @@ class ColorExtractor():
         return counts, colors_centers
         
 
-    def find_colors_via_clustering_3D(self, masks, masked_img, number_of_colors, max_num_colors, use_quantize=False):
+    def find_colors_via_clustering_3D(self, masks, masked_img, use_quantize=False):
         ''' Clustering 3D is based on three-values; R, G, B
         use_num_pixels_percentage (p) the percentage denotes the probability of a color, 
         since we are picking max_num_colors out of the available 
@@ -88,63 +94,19 @@ class ColorExtractor():
             image  = masked_img[label_id]
             if use_quantize:
                 image = Image.fromarray(masked_img[label_id])
-                image = image.quantize(colors=number_of_colors, method=None, kmeans=0, palette=None).convert('RGB')
+                image = image.quantize(colors=self.number_of_colors, method=None, kmeans=0, palette=None).convert('RGB')
                 image = np.array(image)               
             
             image_no_bkg = self.remove_image_background(image, mask = masks[label_id])
-            counts, colors_centers = self.get_colors_cluster(image_no_bkg, number_of_colors=number_of_colors)  
-            top_k_colors = counts.most_common()[:max_num_colors] 
+            counts, colors_centers = self.get_colors_cluster(image_no_bkg, number_of_colors=self.number_of_colors)  
+            top_k_colors = counts.most_common()[:self.max_num_colors] 
             x= dict(top_k_colors)            
             numpixels_and_colors = []       
             for key in x.keys(): numpixels_and_colors.append( [x[key]/num_pixels_in_mask, colors_centers[key]])                                   
             self.top_k_colors.append(dict(numpixels_and_colors))
     
-    def find_colors_via_clustering_3D_1D(self, masks, masked_img, number_of_colors, max_num_colors):
-        ''' Clustering_3D_1D is based on three-values; R, G, B, and then, on 1D via h value from hsv
-        use_num_pixels_percentage (p) the percentage denotes the probability of a color, 
-        since we are picking max_num_colors out of the available 
-        number_of_colors the sum will not be 1, the sum will one
-        if and only if max_num_colors equals number_of_colors 
-        '''
-        use_num_pixels_percentage = True 
-        for label_id in range(len(self.labels)):   
-            num_pixels_in_mask = np.sum(masks[label_id]) if use_num_pixels_percentage else 1
-            image  = masked_img[label_id]           
-            image_no_bkg = self.remove_image_background(image, mask = masks[label_id])
-            
-            # use clustering to reduce the number of colors
-            counts_from_cluster, colors_centers = self.get_colors_cluster(image_no_bkg, number_of_colors=number_of_colors)  
-            
-            # find the average of close colors according to hue value
-            merged_centers, merged_labels = merge_clusters(colors_centers, quantile= None) 
-            counts_from_cluster = dict(counts_from_cluster.most_common())
-                        
-            numpixels =  np.zeros(len(counts_from_cluster), dtype = 'float'); updated_labels = []
-            colors_= np.zeros(merged_centers.shape, dtype = 'uint8')            
-            
-            for i, key in enumerate(counts_from_cluster.keys()): 
-                numpixels[i] =  counts_from_cluster[key]/num_pixels_in_mask 
-                colors_ [i] =  merged_centers[key]
-                updated_labels.append(merged_labels[key])
-                
-            pixsum = []; colors2 = []
-            for i in np.unique(merged_labels):
-                jj = updated_labels==i
-                pixsum.append( sum(numpixels[jj]) )
-                idxTrue = np.where(jj)[0][0]
-                colors2.append( colors_[idxTrue])
-                
-            sorted_indxs = np.flip( np.argsort(pixsum) )
-            if len(sorted_indxs)>max_num_colors: 
-                sorted_indxs=sorted_indxs[:max_num_colors]                
-            
-            numpixels_and_colors = []   
-            for i in sorted_indxs:
-                numpixels_and_colors.append([pixsum[i], colors2[i]])
-                            
-            self.top_k_colors.append(dict(numpixels_and_colors))
     
-    def find_colors_via_clustering_3D_1D_cntPix(self, masks, masked_img, number_of_colors, max_num_colors, use_quantize=False):
+    def find_colors_via_clustering_3D_1D_cntPix(self, masks, masked_img):
         ''' Clustering_3D_1D is based on three-values; R, G, B, and then, on 1D via h value from hsv
         use_num_pixels_percentage (p) the percentage denotes the probability of a color, 
         since we are picking max_num_colors out of the available 
@@ -158,7 +120,7 @@ class ColorExtractor():
             image_no_bkg = self.remove_image_background(image, mask = masks[label_id])
             
             # use clustering to reduce the number of colors
-            counts_from_cluster, colors_centers = self.get_colors_cluster(image_no_bkg, number_of_colors=number_of_colors)  
+            counts_from_cluster, colors_centers = self.get_colors_cluster(image_no_bkg, number_of_colors=self.number_of_colors)  
             
             # finding the percentage of the color, something like the probability
             for i, key in enumerate(counts_from_cluster.keys()): 
@@ -186,8 +148,8 @@ class ColorExtractor():
                 
             # sorting the indices according to pixel count    
             sorted_indxs = np.flip(np.argsort(pixsum)) 
-            if len(sorted_indxs)>max_num_colors: 
-                sorted_indxs = sorted_indxs[:max_num_colors]                
+            if len(sorted_indxs)>self.max_num_colors: 
+                sorted_indxs = sorted_indxs[:self.max_num_colors]                
             #  pixels sums and corresponding colors
             numpixels_and_colors = []   
             for i in sorted_indxs:

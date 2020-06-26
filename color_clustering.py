@@ -46,14 +46,15 @@ def generate_all_colors(dataset, cnf):
     all_persons_items = []    
     # ids  = range(len(dataset))
     ids = [271]
-    ids = [58]
-    ids =[192]
+    # ids = [58]
+    # ids =[192]
     for i in ids:    
         image, masked_img, labels, image_id, masks, im_name = dataset[i]   
         one_person_clothing_colors = color_extractor_obj(image, masks, labels, masked_img, 
                                                          number_of_colors = cnf.num_colors, 
                                                          max_num_colors = cnf.max_num_colors,
-                                                         use_quantize=cnf.use_quantize)  
+                                                         use_quantize=cnf.use_quantize,
+                                                         method = cnf.method)  
         
         fname = im_name if cnf.save_fig_as_images else None
         one_person_clothing_colors.pie_chart(image, fname=fname, figure_size=(4, 4))
@@ -75,11 +76,10 @@ def fill_color_table(dataset, cnf):
     return 
     
 
-
+cnf.method = '3D_1D' # methods are: {'3D_1D', '3D'}
 cnf.num_colors = 13
 cnf.max_num_colors= 4
 cnf.use_quantize = True
-cnf.method = '3d_1d' #{'3d_1d', '3d'}
 dataset = get_dataset(cnf)
 x, image = generate_all_colors(dataset, cnf)
 x[0][0]['skin']

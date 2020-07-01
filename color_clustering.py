@@ -47,7 +47,7 @@ def generate_all_colors(dataset, cnf):
     # ids  = range(len(dataset))
     ids = [271]
     # ids = [58]
-    # ids =[192]
+    ids =[192]
     for i in ids:    
         image, masked_img, labels, image_id, masks, im_name = dataset[i]   
         one_person_clothing_colors = color_extractor_obj(image, masks, labels, masked_img, 
@@ -77,11 +77,13 @@ def fill_color_table(dataset, cnf):
     
 
 cnf.method = '3D_1D' # methods are: {'3D_1D', '3D'}
-cnf.num_colors = 13
+cnf.num_colors = 7 # we perhapse need to use different set of colors depending on the item, for skin should be 4
 cnf.max_num_colors= 4
 cnf.use_quantize = True
 dataset = get_dataset(cnf)
 x, image = generate_all_colors(dataset, cnf)
-x[0][0]['skin']
+# cnf.method = '3D' # methods are: {'3D_1D', '3D'}
+# x, image = generate_all_colors(dataset, cnf)
+# x[0][0]['skin']
 
 

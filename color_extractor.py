@@ -15,12 +15,10 @@ from collections import Counter
 # 'WXCairo', 'agg', 'cairo', 'pdf', 'pgf', 'ps', 'svg', 'template']
 import matplotlib.pyplot as plt
 from PIL import Image
-from color_utils import merge_clusters
+from color_utils import merge_clusters, RGB2HEX
  
 
 
-def RGB2HEX(rgb):
-    return "#{:02x}{:02x}{:02x}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
 
 class ColorExtractor():
     ''' Extracts the colors of one person fashion items/clothing'''
@@ -33,27 +31,30 @@ class ColorExtractor():
         self.labels = labels     
         
         # computed values
-        self.top_k_colors=[]
-        # self.colors_centers = []                     
-                
+        self.top_k_colors=[]        
+        self.item={}                 
         
         if method == '3D_1D':
             self.find_colors_via_clustering_3D_1D_cntPix(masks, masked_img)
         elif method == '3D':              
             self.find_colors_via_clustering_3D(masks, masked_img, 
                                                   use_quantize= use_quantize)
-       
-
-
+ 
+         
     def pie_chart(self, image, figure_size=(9, 6), fname=None):
         
-        for j in range(len(self.labels)):            
-            hex_colors = [RGB2HEX(self.top_k_colors[j][key]) for key in self.top_k_colors[j].keys()]    
+        for j, label_val in enumerate(self.labels):     
+            hex_colors = [RGB2HEX(self.item[label_val][key]) for key in self.item[label_val].keys()]   
+            pixel_counts = [key for key in self.item[label_val].keys()]
+            pixel_counts = np.round(pixel_counts/sum(pixel_counts), 2)
+                        
             plt.figure(figsize = figure_size)
-            plt.suptitle( self.labels[j] , fontsize=16)
-            num_pixel_percent =[k*100 for k in self.top_k_colors[j].keys()]            
-            plt.pie(num_pixel_percent, labels = hex_colors, colors = hex_colors,
+            plt.suptitle(label_val, fontsize=16)
+            num_pixel_percent =[k*100 for k in self.item[label_val].keys()]            
+            plt.pie(num_pixel_percent, labels = pixel_counts, colors = hex_colors,
                     rotatelabels = False)            
+            # plt.pie(num_pixel_percent, labels = hex_colors, colors = hex_colors, # drawing color vlaues in hexdecimal
+            #         rotatelabels = False)            
                        
             if fname:
                 plt.savefig('./Figures/' + fname + '_ncol='+ str(self.number_of_colors) + '_' + self.labels[j] +'.png')                
@@ -62,7 +63,6 @@ class ColorExtractor():
         if fname: image.save('./Figures/' + fname +'.jpg') # saving the original image for comparision
         plt.show()
         plt.close()
-        
     
     
     def remove_image_background(self, image, mask):
@@ -74,7 +74,7 @@ class ColorExtractor():
         
     def get_colors_cluster(self, image, number_of_colors):      
         clf = KMeans(n_clusters = self.number_of_colors, n_jobs=10,
-                      max_iter=3000, n_init=16, init='k-means++') # we are using higher number of max_iter and n_init to ensure convergence
+                      max_iter=300, n_init=64, tol=1e-4, init='k-means++') # we are using higher number of max_iter and n_init to ensure convergence
         pred_labels = clf.fit_predict(image)
         counts = Counter(pred_labels)    
         colors_centers = np.uint8(clf.cluster_centers_.round())
@@ -114,7 +114,10 @@ class ColorExtractor():
         if and only if max_num_colors equals number_of_colors 
         '''
         use_num_pixels_percentage = True 
-        for label_id in range(len(self.labels)):   
+        for label_id, label_val in enumerate(self.labels):  
+            
+            print(label_val)
+            
             num_pixels_in_mask = np.sum(masks[label_id]) if use_num_pixels_percentage else 1
             image  = masked_img[label_id]           
             image_no_bkg = self.remove_image_background(image, mask = masks[label_id])
@@ -128,34 +131,42 @@ class ColorExtractor():
             
             # find the average of similar colors according to hue value
             grouped_centers, grouped_labels = merge_clusters(colors_centers, counts_from_cluster, quantile= None) 
-            counts_from_cluster = dict(counts_from_cluster.most_common())
-                        
             
+            ''' Danger that needs to be chacked '''
+            counts_from_cluster = dict(counts_from_cluster.most_common()) # should this be put here or before????
             numpixels =  np.zeros(len(counts_from_cluster), dtype = 'float'); updated_labels = []
             colors_= np.zeros(grouped_centers.shape, dtype = 'uint8')      
             for i, key in enumerate(counts_from_cluster.keys()): 
-                numpixels[i] =  counts_from_cluster[key] # /num_pixels_in_mask 
+                numpixels[i] =  counts_from_cluster[key]  
                 colors_ [i] =  grouped_centers[key] # here we use grouped_centers instead of counts_from_cluster as we are interested in the new colors found according to the hue value
                 updated_labels.append(grouped_labels[key]) # we will be neededing the labels later
             
-            # grouping colors according to similar labels find via the hue value
+            # grouping colors according to similar labels found via the hue value
             pixsum = []; colors_grouped = []
             for i in np.unique(grouped_labels):
                 jj = updated_labels==i
                 pixsum.append( sum(numpixels[jj]) )
                 idxTrue = np.where(jj)[0][0]
-                colors_grouped.append( colors_[idxTrue])
+                colors_grouped.append(colors_[idxTrue])
                 
             # sorting the indices according to pixel count    
             sorted_indxs = np.flip(np.argsort(pixsum)) 
             if len(sorted_indxs)>self.max_num_colors: 
                 sorted_indxs = sorted_indxs[:self.max_num_colors]                
+            
             #  pixels sums and corresponding colors
             numpixels_and_colors = []   
             for i in sorted_indxs:
-                numpixels_and_colors.append([pixsum[i], colors_grouped[i]])
-                            
-            self.top_k_colors.append(dict(numpixels_and_colors))
+                if pixsum[i]*len(sorted_indxs) > 0.5: 
+                    ''' If the color sum is too small, remove it: For 20 colors,
+                    they will, in a typical situation have, 0.05 x 20 colors
+                    uniformly distributed. Setting the threshold at 0.5 means we can 
+                    remove at least 10 colors as (1/20)*10 =0.5 if their share
+                    is somewhere less than 0.05 and keep the other 10;
+                    thus, retaining 10 other colors out of 20'''
+                    numpixels_and_colors.append([pixsum[i], colors_grouped[i]])
+            
+            self.item[label_val] = dict(numpixels_and_colors)
 
         
     def find_colors_via_quantize(self, masked_img, number_of_colors, max_num_colors, image):
@@ -168,12 +179,8 @@ class ColorExtractor():
             self.top_k_colors.append(dict(top_k_colors))
                 
         
-    def __getitem__(self, ind):
-        item={}
-        for j in range(len(self.labels)):               
-            item[ self.labels[j] ] = self.top_k_colors[j]
-        
-        return item
+    def __getitem__(self, ind):               
+        return self.item
     
 
     def __len__(self): 

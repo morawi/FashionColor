@@ -8,10 +8,15 @@ Created on Thu Jun 18 17:45:22 2020
 import numpy as np
 from clothcoparse_dataset import ImageDataset 
 from sklearn.cluster import MeanShift, estimate_bandwidth
-
 import cv2
+import matplotlib.pyplot as plt
+
 # from modanet_dataset import ModanetDataset # this is becuase PyCocoTools is killing matplotlib backend
 # https://github.com/cocodataset/cocoapi/issues/433
+
+def RGB2HEX(rgb):
+    return "#{:02x}{:02x}{:02x}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+
 
 
 def get_dataset(opt):    
@@ -35,8 +40,6 @@ def mean_rgb_colors(c1, c2):
     
     return (r,g,b)
 
-def RGB2HEX(rgb):
-    return "#{:02x}{:02x}{:02x}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
 
 
 def cluster_1D(x, quantile=None, show=False):   
@@ -58,12 +61,27 @@ def cluster_1D(x, quantile=None, show=False):
         - result[cluster_centers] # a vector of cluster centers    
     -------------------------------------------------------------------- '''    
     x = x.reshape(-1, 1)
+    hue_std_threchold = 16
+    
+  
+    ''' Best way is to estimate the quantile 
+    from the variance of x 
+    if x is low, then, quanitle should be high
+    
+    '''
+   
+    if np.std(x) < hue_std_threchold:
+         quantile = 0.5
+        
     
     if quantile not in (0, None):
         bw = estimate_bandwidth(x, quantile=quantile, n_samples=len(x))
     else: bw = None
     
-    ms = MeanShift(bandwidth=bw, bin_seeding=False) # bin_seeding = True causes a problem
+    if len(x)<5:
+        bw=0.5
+        
+    ms = MeanShift(bandwidth=bw, bin_seeding=False) # bin_seeding = True causes a problem sometimes when bw is None (bw None is the default value)
     ms.fit(x)  
     result = {}
     result['labels'] = ms.labels_ 
@@ -83,23 +101,20 @@ def merge_clusters(rgb_array_in, counts_from_cluster, quantile=None):
     rgb_array = np.expand_dims(rgb_array, axis=0)
     hsv = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)
     hsv = np.squeeze(hsv, axis=0)
-    h_val = hsv[:, 0] # getting the h value to be used in clustering
-    result, ms = cluster_1D(h_val, quantile=quantile)    
-    rgb_array = np.squeeze(rgb_array, axis=0)
-    rgb_array = rgb_array.astype(float) 
-    # rgb_array = average_similar_colors(rgb_array, result['labels'])   
-    rgb_array = average_similar_colors2(rgb_array, counts_from_cluster, result['labels'])   
-    
+    h_val = hsv[:, 0] # getting the h value to be used in clustering    
+    result, ms = cluster_1D(h_val, quantile=quantile)
+    rgb_array = np.squeeze(rgb_array, axis=0).astype(float)    
+    rgb_array = average_similar_colors_pix_cnt(rgb_array, counts_from_cluster, result['labels'])    
     return rgb_array, result['labels']
     
 def average_similar_colors(rgb_array, labels):
     ''' Direct average between hue grouped colors '''
     for i in np.unique(labels):
         mean_rgb_at_i = np.mean(rgb_array[labels == i], axis=0)
-        rgb_array[ labels==i ] = np.uint8( mean_rgb_at_i )               
+        rgb_array[ labels==i ] = np.uint8( mean_rgb_at_i )
     return rgb_array
 
-def average_similar_colors2(rgb_array, counts_from_cluster, labels):
+def average_similar_colors_pix_cnt(rgb_array, counts_from_cluster, labels):
     ''' Take the percentage average between grouped colors according to the
     count of pixels in each color in the group, example:
         0.75 has color (10, 15, 20) and 0.25 has color (20, 25, 10), the 
@@ -141,5 +156,5 @@ def ttest(x, idxs):
     print(out_t)
     return out_t
     
-    
+
     

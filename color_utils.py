@@ -9,7 +9,7 @@ import numpy as np
 from clothcoparse_dataset import ImageDataset 
 from sklearn.cluster import MeanShift, estimate_bandwidth
 import cv2
-import matplotlib.pyplot as plt
+
 
 # from modanet_dataset import ModanetDataset # this is becuase PyCocoTools is killing matplotlib backend
 # https://github.com/cocodataset/cocoapi/issues/433
@@ -42,7 +42,7 @@ def mean_rgb_colors(c1, c2):
 
 
 
-def cluster_1D(x, quantile=None, show=False):   
+def cluster_1D(x, show=False):   
     ''' ---------------------------------------------------------------
     Cluster a 1D array into segments according to the quantile value, the 
     higher the quntile, the less number of clusters, and vice versa 
@@ -60,8 +60,8 @@ def cluster_1D(x, quantile=None, show=False):
         - result['labels'] # a vector of all the labels having cluster id
         - result[cluster_centers] # a vector of cluster centers    
     -------------------------------------------------------------------- '''    
-    x = x.reshape(-1, 1)
-    hue_std_threchold = 16
+   
+    hue_std_threchold = 5
     
   
     ''' Best way is to estimate the quantile 
@@ -69,18 +69,17 @@ def cluster_1D(x, quantile=None, show=False):
     if x is low, then, quanitle should be high
     
     '''
-   
-    if np.std(x) < hue_std_threchold:
+    z = np.sort(x)
+    v1 = np.std(z[z>np.mean(z)])
+    v2 =  np.std(z[z<np.mean(z)])
+    x = x.reshape(-1, 1)     
+    if v1 < hue_std_threchold and v2 < hue_std_threchold or len(x)<5:
          quantile = 0.5
-        
-    
-    if quantile not in (0, None):
-        bw = estimate_bandwidth(x, quantile=quantile, n_samples=len(x))
-    else: bw = None
-    
-    if len(x)<5:
-        bw=0.5
-        
+         bw = estimate_bandwidth(x, quantile=quantile, n_samples=len(x))     
+    else:
+        bw = None    
+         
+       
     ms = MeanShift(bandwidth=bw, bin_seeding=False) # bin_seeding = True causes a problem sometimes when bw is None (bw None is the default value)
     ms.fit(x)  
     result = {}
@@ -93,8 +92,6 @@ def cluster_1D(x, quantile=None, show=False):
         print('bw=', bw)    
     
     return result, ms
-
-
     
 def merge_clusters(rgb_array_in, counts_from_cluster, quantile=None):
     rgb_array = rgb_array_in.copy() # we need to make a copy, and it has to be of float type to prevent overflow
@@ -102,7 +99,7 @@ def merge_clusters(rgb_array_in, counts_from_cluster, quantile=None):
     hsv = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)
     hsv = np.squeeze(hsv, axis=0)
     h_val = hsv[:, 0] # getting the h value to be used in clustering    
-    result, ms = cluster_1D(h_val, quantile=quantile)
+    result, ms = cluster_1D(h_val)
     rgb_array = np.squeeze(rgb_array, axis=0).astype(float)    
     rgb_array = average_similar_colors_pix_cnt(rgb_array, counts_from_cluster, result['labels'])    
     return rgb_array, result['labels']

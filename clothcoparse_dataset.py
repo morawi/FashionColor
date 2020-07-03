@@ -3,10 +3,7 @@ import os
 import scipy.io as sio
 from torch.utils.data import Dataset # Dataset class from PyTorch
 from PIL import Image, ImageChops # PIL is a nice Python Image Library that we can use to handle images
-import torchvision.transforms as transforms # torch transform used for computer vision applications
 import numpy as np
-import torch
-# import sys
 
 # https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
 
@@ -29,7 +26,7 @@ def get_clothCoParse_class_names():
 class ImageDataset(Dataset):
     def __init__(self, root, mode="train",  HPC_run=False):
         
-        self.class_name = get_clothCoParse_class_names()
+        self.class_names = get_clothCoParse_class_names()
         
         if HPC_run:
             root = '/home/malrawi/MyPrograms/Data/ClothCoParse'
@@ -57,10 +54,10 @@ class ImageDataset(Dataset):
         for i in range(num_objs):
             img = ImageChops.multiply(image_A, Image.fromarray(255*masks[i]).convert('RGB') )
             masked_img.append(np.array(img, dtype='uint8'))                               
-            labels.append(self.class_name[obj_ids[i]])
+            labels.append(self.class_names[obj_ids[i]])
                               
         image_id = index
-        fname = self.files_A[index % len(self.files_A)][-8:-4]
+        fname = os.path.basename(self.files_A[index % len(self.files_A)])
           
         
         return image_A, masked_img, labels, image_id, masks, fname

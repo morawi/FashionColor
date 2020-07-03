@@ -64,24 +64,24 @@ class ColorTable():
             colr_df.loc[len(colr_df)] = colors
         colr_df.index = img_names
         pix_cnt_df.index = img_names
-        # to access one row, we use: colr_df.loc['0272.jpg'], where '0272.jpg' is the image name index
-        # to acess one point at a specific row and column we can use, colr_df['colr_0']['0272.jpg']
+        ''' - To access one row, we use: colr_df.loc['0272.jpg'], where '0272.jpg' is the image name index
+            - To acess one point at a specific row and column we can use, colr_df['colr_0']['0272.jpg']  '''
             
         return pix_cnt_df, colr_df
 
     
     def build_table(self): # arrange in    
-        pix_cnt_df={}; colr_df ={}  ; img_name_df={}     
+        pix_cnt_df={}; colr_df ={} 
         for i, key in enumerate(self.df): # key here is fashion item, e.g. skirt, dress, etc                 
             idx = self.df[key].notna() # indices for all clients that are not None
             if key == 'im_name' or key == 'background' or not(idx.any()): continue                                    
             pix_cnt_df[key], colr_df[key] = self.get_cnt_color_as_df(self.df[key][idx], 
                                                                      self.df['im_name'][idx])
-            img_name_df[key] = self.df['im_name'][idx]            
+            
             ''' pix_cnt, colr, and img_names have one to one correspondence '''
-        self.color_table['pix_cnt_df'] = pix_cnt_df
-        self.color_table['colr_df'] = colr_df
-        # self.color_table['img_name_df'] = img_name_df
+        self.data_dict['pix_cnt_df'] = pix_cnt_df
+        self.data_dict['colr_df'] = colr_df
+        
             
              
 

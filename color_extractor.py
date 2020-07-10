@@ -49,10 +49,10 @@ class ColorExtractor():
             pixel_counts, hex_colors = zip(*[( item[0], RGB2HEX(item[1])) for item in self.item[label_val]])            
             pixel_counts = np.round(pixel_counts/sum(pixel_counts), 2)                        
             plt.figure(figsize = figure_size)
-            plt.suptitle(label_val, fontsize=16)
+            plt.suptitle(label_val, fontsize=22)
             num_pixel_percent =[cnt*100 for cnt, rgb in self.item[label_val]]            
             plt.pie(num_pixel_percent, labels = pixel_counts, colors = hex_colors,
-                    rotatelabels = False)            
+                    rotatelabels = False, textprops={'fontsize': 18})            
             # plt.pie(num_pixel_percent, labels = hex_colors, colors = hex_colors, # drawing color vlaues in hexdecimal
             #         rotatelabels = False)            
                        
@@ -72,9 +72,9 @@ class ColorExtractor():
         return image_no_bkg
     
         
-    def get_colors_cluster(self, image, number_of_colors):      
-        clf = KMeans(n_clusters = self.number_of_colors, n_jobs=10,
-                      max_iter=3000, n_init=16, tol=1e-4, init='k-means++') # we are using higher number of max_iter and n_init to ensure convergence
+    def get_colors_cluster(self, image, no_clusters):      
+        clf = KMeans(n_clusters = no_clusters, n_jobs=10,init='k-means++')
+                    #  max_iter=1000, n_init=100, tol=1e-8, init='k-means++') # we are using higher number of max_iter and n_init to ensure convergence
         pred_labels = clf.fit_predict(image)
         counts = Counter(pred_labels)    
         colors_centers = np.uint8(clf.cluster_centers_.round())
@@ -98,14 +98,18 @@ class ColorExtractor():
                 image = np.array(image)               
             
             image_no_bkg = self.remove_image_background(image, mask = masks[label_id])
-            counts, colors_centers = self.get_colors_cluster(image_no_bkg, number_of_colors=self.number_of_colors)  
+            
+            if len(image_no_bkg) < self.number_of_colors:
+                no_clusters = len(image_no_bkg)
+            else: no_clusters = self.number_of_colors
+            counts, colors_centers = self.get_colors_cluster(image_no_bkg, no_clusters=no_clusters)  
             top_k_colors = counts.most_common()[:self.max_num_colors] 
             x= dict(top_k_colors)            
             numpixels_and_colors = []       
             for key in x.keys(): 
                 numpixels_and_colors.append( [x[key]/num_pixels_in_mask, colors_centers[key]])                                   
                         
-            # self.item[label_val] = dict(numpixels_and_colors)
+            
             self.item[label_val] = numpixels_and_colors
             
     
@@ -126,14 +130,17 @@ class ColorExtractor():
             image_no_bkg = self.remove_image_background(image, mask = masks[label_id])
             
             # use clustering to reduce the number of colors
-            counts_from_cluster, colors_centers = self.get_colors_cluster(image_no_bkg, number_of_colors=self.number_of_colors)  
+            if len(image_no_bkg) < self.number_of_colors:
+                no_clusters = len(image_no_bkg)
+            else: no_clusters = self.number_of_colors
+            counts_from_cluster, colors_centers = self.get_colors_cluster(image_no_bkg, no_clusters=no_clusters)  
             
             # finding the percentage of the color, something like the probability
             for i, key in enumerate(counts_from_cluster.keys()): 
                 counts_from_cluster[i] =  counts_from_cluster[i]/num_pixels_in_mask 
             
             # find the average of similar colors according to hue value
-            grouped_centers, grouped_labels = merge_clusters(colors_centers, counts_from_cluster, quantile= None) 
+            grouped_centers, grouped_labels = merge_clusters(colors_centers, counts_from_cluster) 
             
             
             counts_from_cluster = dict(counts_from_cluster.most_common()) # should this be put here or before????
@@ -160,7 +167,7 @@ class ColorExtractor():
             #  pixels sums and corresponding colors
             numpixels_and_colors = []   
             for i in sorted_indxs:
-                if pixsum[i]*self.max_num_colors > 0.25: 
+                if pixsum[i]*self.max_num_colors > 0.5: 
                     ''' If the color sum is too small, remove it: For 20 colors,
                     they will, in a typical situation have, 0.05 x 20 colors
                     uniformly distributed. Setting the threshold at 0.5 means we can 

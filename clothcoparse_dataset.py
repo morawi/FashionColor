@@ -38,7 +38,7 @@ class ImageDataset(Dataset):
         return(len(get_clothCoParse_class_names())) # this should do
   
 
-    def __getitem__(self, index):              
+    def __getitem__(self, index):   
                 
         annot = sio.loadmat(self.files_B[index % len(self.files_B)])
         mask = annot["groundtruth"]

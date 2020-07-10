@@ -9,6 +9,7 @@ import numpy as np
 from clothcoparse_dataset import ImageDataset 
 from sklearn.cluster import MeanShift, estimate_bandwidth
 import cv2
+import matplotlib.pyplot as plt
 
 
 # from modanet_dataset import ModanetDataset # this is becuase PyCocoTools is killing matplotlib backend
@@ -61,25 +62,31 @@ def cluster_1D(x, show=False):
         - result[cluster_centers] # a vector of cluster centers    
     -------------------------------------------------------------------- '''    
    
-    hue_std_threchold = 5
-    
-  
+   
     ''' Best way is to estimate the quantile 
     from the variance of x 
     if x is low, then, quanitle should be high
     
-    '''
-    z = np.sort(x)
-    v1 = np.std(z[z>np.mean(z)])
-    v2 =  np.std(z[z<np.mean(z)])
-    x = x.reshape(-1, 1)     
-    if v1 < hue_std_threchold and v2 < hue_std_threchold or len(x)<5:
-         quantile = 0.5
-         bw = estimate_bandwidth(x, quantile=quantile, n_samples=len(x))     
-    else:
-        bw = None    
-         
-       
+    '''   
+    quantile=0; max_iter = 0; bw = 0
+    z = np.sort(x[:,0])
+    v1 = np.std(z[z>np.mean(z)]) 
+    v2 =  np.std(z[z<np.mean(z)])      
+    
+    if max(v1,v2)<3: quantile = 0.85 + min(v1,v2)/100
+    if max(v1,v2)<6: quantile = 0.8
+    elif max(v1,v2)<8: quantile = 0.75        
+    if max(v1,v2)<10: quantile = 0.65        
+    elif max(v1, v2) < 14: quantile = 0.5
+    else: quantile = 0.05            
+    while (bw == 0):    
+        quantile = quantile + 0.05 #  0.1
+        bw = estimate_bandwidth(x, quantile=quantile, n_samples=len(x)) 
+        max_iter +=1
+        if max_iter>100: 
+            bw = None                
+            break
+    bw= 1
     ms = MeanShift(bandwidth=bw, bin_seeding=False) # bin_seeding = True causes a problem sometimes when bw is None (bw None is the default value)
     ms.fit(x)  
     result = {}
@@ -91,19 +98,74 @@ def cluster_1D(x, show=False):
         print(result['labels'])
         print('bw=', bw)    
     
-    return result, ms
+    print('bw=',bw, 'quantile=', quantile, 'v1', v1, 'v2', v2, 'std', np.std(z))         
+    print(ms.labels_)
     
-def merge_clusters(rgb_array_in, counts_from_cluster, quantile=None):
+    return result, ms
+
+def differntial_1D_cluster(inp_vector):    
+    ''' Totally unspervised, all what is needed is one threshold
+    value. No quantiles, no bandwidths, no iterations, nothing 
+    '''
+    # std =  np.std(inp_vector)  
+    # mean = np.mean(inp_vector) + 0.001  # the 0.0001 to prevent zero division  if the mean is 0
+    # coeff_var = std/mean
+    # print('cf',coeff_var, 'std', std, 'mean', mean, np.median(inp_vector) , np.max(inp_vector))
+    threshold = np.max(inp_vector)* len(inp_vector) / (np.sum(inp_vector)-len(inp_vector)*np.min(inp_vector))
+    print('new thresh', threshold)
+    
+    
+    inp_ordered = np.sort(inp_vector)
+    inp_appended = np.sort(np.append(inp_ordered, inp_ordered[0]))
+    index_of_clusters = (inp_ordered  - inp_appended[:-1]) >  threshold        
+    # Every True is followed by the members of the cluster, 
+    # until the next True that marks the next cluster, and so on
+    
+    
+    peak_idx = np.where(index_of_clusters == True)[0]
+    labels = []; jj= 0; label_id=0
+    for peak_id in peak_idx:
+        labels.extend((peak_id-jj)*[label_id])
+        label_id +=1
+        jj=peak_id    
+    # adding the last element manually    
+    if len(labels)!= len(inp_vector):
+        labels.extend( (len(inp_vector)-jj )*[label_id])
+    
+    # Now, reoredering labels to undo sorting
+    I = np.argsort(inp_vector) # sorting indices
+    J = np.argsort(I)  # these are the indices to undo sorting
+    labels= np.array(labels)
+    labels = labels[J] 
+    
+    plt.plot(inp_ordered) 
+    plt.show()
+    
+            
+    return labels
+
+
+def merge_clusters(rgb_array_in, counts_from_cluster):
     rgb_array = rgb_array_in.copy() # we need to make a copy, and it has to be of float type to prevent overflow
     rgb_array = np.expand_dims(rgb_array, axis=0)
     hsv = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)
-    hsv = np.squeeze(hsv, axis=0)
-    h_val = hsv[:, 0] # getting the h value to be used in clustering    
+    hsv = np.squeeze(hsv, axis=0)            
+    labels = differntial_1D_cluster(hsv[:, 0]) # hsv[:, 0] is the hue component
+    rgb_array = np.squeeze(rgb_array, axis=0).astype(float)    
+    rgb_array = average_similar_colors_pix_cnt(rgb_array, counts_from_cluster, labels)     
+    return rgb_array, labels
+    
+
+def merge_clusters_old(rgb_array_in, counts_from_cluster):
+    rgb_array = rgb_array_in.copy() # we need to make a copy, and it has to be of float type to prevent overflow
+    rgb_array = np.expand_dims(rgb_array, axis=0)
+    hsv = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)
+    hsv = np.squeeze(hsv, axis=0)    
+    h_val=hsv[:, 0:1] # h_val = hsv[:, 0] # getting the h value to be used in clustering     
     result, ms = cluster_1D(h_val)
     rgb_array = np.squeeze(rgb_array, axis=0).astype(float)    
-    rgb_array = average_similar_colors_pix_cnt(rgb_array, counts_from_cluster, result['labels'])    
+    rgb_array = average_similar_colors_pix_cnt(rgb_array, counts_from_cluster, result['labels'])     
     return rgb_array, result['labels']
-    
 def average_similar_colors(rgb_array, labels):
     ''' Direct average between hue grouped colors '''
     for i in np.unique(labels):
@@ -154,4 +216,12 @@ def ttest(x, idxs):
     return out_t
     
 
-    
+''' This std/mean is not doing well, 
+    all the problem was in estimating the quantile
+    as shown above in cluster_1D() function'''
+    # std =  np.std(rgb_array_in, axis=1)  
+    # mean = np.mean(rgb_array_in, axis=1) + 0.001  # the 0.0001 to prevent zero division  if the mean is 0
+    # coeff_var = 10*(std/mean)
+    # print(rgb_array_in)
+    # print(coeff_var)
+    # h_val[:,2:3] =  coeff_var[:, None]

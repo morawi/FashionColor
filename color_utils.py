@@ -10,7 +10,7 @@ from clothcoparse_dataset import ImageDataset
 from sklearn.cluster import MeanShift, estimate_bandwidth
 import cv2
 import matplotlib.pyplot as plt
-
+from collections import Counter
 
 # from modanet_dataset import ModanetDataset # this is becuase PyCocoTools is killing matplotlib backend
 # https://github.com/cocodataset/cocoapi/issues/433
@@ -103,7 +103,7 @@ def cluster_1D(x, show=False):
     
     return result, ms
 
-def differntial_1D_cluster(inp_vector):    
+def differntial_1D_cluster(inp_vector, counts_from_cluster):    
     ''' Totally unspervised, all what is needed is one threshold
     value. No quantiles, no bandwidths, no iterations, nothing 
     '''
@@ -111,9 +111,10 @@ def differntial_1D_cluster(inp_vector):
     # mean = np.mean(inp_vector) + 0.001  # the 0.0001 to prevent zero division  if the mean is 0
     # coeff_var = std/mean
     # print('cf',coeff_var, 'std', std, 'mean', mean, np.median(inp_vector) , np.max(inp_vector))
-    threshold = np.max(inp_vector)* len(inp_vector) / (np.sum(inp_vector)-len(inp_vector)*np.min(inp_vector))
-    print('new thresh', threshold)
-    
+    if np.max(inp_vector)-np.min(inp_vector)< 20:
+        threshold = 30 
+    else:        
+        threshold = np.max(inp_vector)* len(inp_vector) / (np.sum(inp_vector)-len(inp_vector)*np.min(inp_vector))
     
     inp_ordered = np.sort(inp_vector)
     inp_appended = np.sort(np.append(inp_ordered, inp_ordered[0]))
@@ -138,8 +139,14 @@ def differntial_1D_cluster(inp_vector):
     labels= np.array(labels)
     labels = labels[J] 
     
-    plt.plot(inp_ordered) 
-    plt.show()
+    # zz = Counter(labels)
+    # most_occuring = zz[max(zz.values())]
+    # other_indices  = labels[labels!=4]
+    
+    # used for debugging 
+    # plt.plot(inp_ordered) 
+    # plt.show()
+    # print('new thresh', threshold)
     
             
     return labels
@@ -148,9 +155,10 @@ def differntial_1D_cluster(inp_vector):
 def merge_clusters(rgb_array_in, counts_from_cluster):
     rgb_array = rgb_array_in.copy() # we need to make a copy, and it has to be of float type to prevent overflow
     rgb_array = np.expand_dims(rgb_array, axis=0)
-    hsv = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)
+    hsv = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV) # COLOR_BGR2HLS
+    # hsv = cv2.cvtColor(rgb_array, cv2.COLOR_BGR2HLS)
     hsv = np.squeeze(hsv, axis=0)            
-    labels = differntial_1D_cluster(hsv[:, 0]) # hsv[:, 0] is the hue component
+    labels = differntial_1D_cluster(hsv[:, 0], counts_from_cluster) # hsv[:, 0] is the hue component
     rgb_array = np.squeeze(rgb_array, axis=0).astype(float)    
     rgb_array = average_similar_colors_pix_cnt(rgb_array, counts_from_cluster, labels)     
     return rgb_array, labels
@@ -162,7 +170,7 @@ def merge_clusters_old(rgb_array_in, counts_from_cluster):
     hsv = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)
     hsv = np.squeeze(hsv, axis=0)    
     h_val=hsv[:, 0:1] # h_val = hsv[:, 0] # getting the h value to be used in clustering     
-    result, ms = cluster_1D(h_val)
+    result, ms = cluster_1D(h_val, counts_from_cluster)
     rgb_array = np.squeeze(rgb_array, axis=0).astype(float)    
     rgb_array = average_similar_colors_pix_cnt(rgb_array, counts_from_cluster, result['labels'])     
     return rgb_array, result['labels']

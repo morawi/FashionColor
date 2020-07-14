@@ -16,7 +16,7 @@ from collections import Counter
 import matplotlib.pyplot as plt
 from PIL import Image
 from color_utils import merge_clusters, RGB2HEX
- 
+from color_names import ColorNames
 
 
 
@@ -29,7 +29,8 @@ class ColorExtractor():
         # inputed        
         self.number_of_colors = number_of_colors
         self.max_num_colors = max_num_colors
-        self.labels = labels     
+        self.labels = labels
+        self.color_names_obj = ColorNames()
         
         # computed values           
         self.item={}            
@@ -40,17 +41,20 @@ class ColorExtractor():
             self.find_colors_via_clustering_3D(masks, masked_img, 
                                                   use_quantize= use_quantize)
         self.item['im_name'] = image_name # adding the file name to be able to track the results if needed
- 
+         
          
     def pie_chart(self, image, figure_size=(9, 6), fname=None):
         
-        for j, label_val in enumerate(self.labels):     
-            # hex_colors, pixel_counts = zip(* [ ( RGB2HEX(item[0]), item[0]) for item in self.item[label_val]]   )
+        
+        for j, label_val in enumerate(self.labels):                 
             pixel_counts, hex_colors = zip(*[( item[0], RGB2HEX(item[1])) for item in self.item[label_val]])            
             pixel_counts = np.round(pixel_counts/sum(pixel_counts), 2)                        
             plt.figure(figsize = figure_size)
             plt.suptitle(label_val, fontsize=22)
-            num_pixel_percent =[cnt*100 for cnt, rgb in self.item[label_val]]            
+            num_pixel_percent =[cnt*100 for cnt in pixel_counts]   
+            names_of_colors = [ self.color_names_obj.get_color_name(item) for item in  hex_colors]
+            print(names_of_colors)
+            pixel_counts =[ str(item) for item in pixel_counts]   # color names from color_names class can be added here
             plt.pie(num_pixel_percent, labels = pixel_counts, colors = hex_colors,
                     rotatelabels = False, textprops={'fontsize': 18})            
             # plt.pie(num_pixel_percent, labels = hex_colors, colors = hex_colors, # drawing color vlaues in hexdecimal
@@ -128,6 +132,9 @@ class ColorExtractor():
             num_pixels_in_mask = np.sum(masks[label_id]) if use_num_pixels_percentage else 1
             image  = masked_img[label_id]           
             image_no_bkg = self.remove_image_background(image, mask = masks[label_id])
+            
+            # saving the masked image
+            # xx = Image.fromarray(image); xx.show(); xx.save('C:/Users/msalr/Desktop/fashion color experiment/Canva Test/884_blouse.png', 'png')
             
             # use clustering to reduce the number of colors
             if len(image_no_bkg) < self.number_of_colors:

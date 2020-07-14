@@ -168,8 +168,7 @@ class ColorTable():
         axis.set_yticks(np.round(np.linspace(0, 255, N), ))
         axis.set_zticks(np.round(np.linspace(0, 255, N), ))
         
-        # plt.savefig('./Figures/' + item_name +'.svg')
-        # plt.savefig('./Figures/' + item_name +".pdf", bbox_inches='tight')
+        plt.savefig('./Figures/' + item_name +".pdf", bbox_inches='tight')
         plt.show()
         
         '''

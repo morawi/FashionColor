@@ -49,18 +49,18 @@ def generate_all_colors(dataset, cnf):
     # ids  = range(len(dataset))
     # ids = [271]
     ids = [58]
-    ids =[192]
+    # ids =[192]
     # ids = [323]
     ids = [833]
+    # ids = [121]
+    # ids =[0]
+    
     
     for i in ids:    
         image, masked_img, labels, image_id, masks, im_name = dataset[i]   
-        one_person_clothing_colors = color_extractor_obj(image, masks, labels, masked_img, 
-                                                         number_of_colors = cnf.num_colors, 
-                                                         max_num_colors = cnf.max_num_colors,
-                                                         use_quantize=cnf.use_quantize,
-                                                         method = cnf.method,
-                                                         image_name=im_name)  
+        one_person_clothing_colors = color_extractor_obj(masks, labels, masked_img, cnf,
+                                                         image_name=im_name)
+                                                         
         
         fname = im_name if cnf.save_fig_as_images else None
         one_person_clothing_colors.pie_chart(image, fname=fname, figure_size=(4, 4))
@@ -77,28 +77,29 @@ def fill_color_table(dataset, cnf):
    #  for i, data_item in enumerate(dataset):        
         print('processing person', i)
         image, masked_img, labels, image_id, masks, im_name = dataset[i]   
-        one_person_clothing_colors = color_extractor_obj(image, masks, labels, masked_img, 
-                                                         number_of_colors = cnf.num_colors, 
-                                                         max_num_colors = cnf.max_num_colors,
-                                                         use_quantize=cnf.use_quantize, 
-                                                         image_name = im_name)  
+        one_person_clothing_colors = color_extractor_obj(masks, labels, masked_img,  cnf,                                                   
+                                                         image_name = im_name)
+                                                           
         color_table_obj.append(one_person_clothing_colors)
         
     return color_table_obj
     
 
-cnf.method = '3D_1D' # methods are: {'3D_1D', '3D'}
-cnf.num_colors = 16 # 16 # we perhapse need to use different set of colors depending on the item, for skin should be 4
-cnf.max_num_colors = 16
-cnf.use_quantize = True
+cnf.method = '3D_1D' # methods are: {'3D_1D'}  ... '3D' method is deleted, not so good
+cnf.num_colors = 14 # 20 # 16 # we perhapse need to use different set of colors depending on the item, for skin should be 4
+cnf.max_num_colors = cnf.num_colors # 20 # you can select top pcolors based on pixel count
+cnf.use_quantize = False
+cnf.clustering_method = 'kmeans' # {'kmeans', 'fcmeans}
+cnf.clsuter_1D_method='Diff'# 'MeanSift'  # {'MeanSift', 'Diff', '2nd_fcm'}
 dataset = get_dataset(cnf)
+
 # obj = fill_color_table(dataset, cnf)
 # obj.build_table()
 # obj.analyze()
-
+print(cnf)
 x, image = generate_all_colors(dataset, cnf)
 
-cnf.method = '3D'
+# cnf.method = '3D'
 # x, image = generate_all_colors(dataset, cnf)
 # # x[0][0]['skin']
 

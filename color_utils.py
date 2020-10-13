@@ -9,9 +9,9 @@ import numpy as np
 from clothcoparse_dataset import ImageDataset 
 from sklearn.cluster import MeanShift, estimate_bandwidth
 import cv2
-import matplotlib.pyplot as plt
 from collections import Counter
 from fcmeans import FCM
+from PIL import Image
 
 # from modanet_dataset import ModanetDataset # this is becuase PyCocoTools is killing matplotlib backend
 # https://github.com/cocodataset/cocoapi/issues/433
@@ -34,12 +34,17 @@ def get_dataset(opt):
     return dataset
 
 def mean_rgb_colors(c1, c2):
+    ''' Calcluate the mean of two pixels based on their corresponding RGB values 
+    - input
+        c1 = (R1, G1, B1) as a tuple
+        c2 = (R2, G2, B2) as a tuple
+    - output 
+        (R,G,B) as a tuple '''
     r1, g1, b1 = c1
     r2, g2, b2 = c2
     r = round((r1+r2)/2)
     g = round((g1+g2)/2)
-    b = round((b1+b2)/2)
-    
+    b = round((b1+b2)/2)    
     return (r,g,b)
 
 
@@ -145,7 +150,10 @@ def differntial_1D_cluster(inp_vector):
 
 
 def merge_clusters(rgb_array_in, counts_from_cluster, clsuter_1D_method = 'Diff'):
-    use_std = True  # This is not working as expected, so we are setting it to False
+    ''' Merges the clusters in rgb_array_in based on cluster_1D_method  applied to the hue values of  rgb_array_in
+    output-
+          an rgb_array with the new labels, after taking the average based on the 1D clustering and the probablility of the simiilar labels '''
+    use_std = True  # If this is not working as expected, we are set it to False
     
     rgb_array = rgb_array_in.copy() # we need to make a copy, and it has to be of float type to prevent overflow
     rgb_array = np.expand_dims(rgb_array, axis=0)
@@ -163,23 +171,42 @@ def merge_clusters(rgb_array_in, counts_from_cluster, clsuter_1D_method = 'Diff'
          rgb_array = clf.centers.round()
          rgb_array = np.expand_dims(rgb_array, axis=0)
          counts_from_cluster = Counter(labels)    
-    else:
-        print('Incorrect choice of clsuter_1D_method')            
-        labels = 0        
+    elif clsuter_1D_method=='None':
+        labels = np.arange(len(rgb_array_in)).tolist()
+        counts_from_cluster = Counter(labels)  
+    else: 
+        print('Please select 1D clustering method')
             
-    if use_std and clsuter_1D_method !='2nd_fcm': # second stage, decompose similar hue(s)
-         labels = decompose_hue(labels, rgb_array_in.copy())         
+    if use_std and clsuter_1D_method !='2nd_fcm' and clsuter_1D_method != 'None': # second stage, decompose similar hue(s)
+         labels = decompose_hue(labels, rgb_array_in.copy())     
     # now, average simliar colors
     rgb_array = average_similar_colors_pix_cnt(rgb_array, counts_from_cluster, labels)    
 
     return rgb_array, labels
 
+
+def save_masked_image(image, label_val, path= 'C:/MyPrograms/FashionColor/Experiments/', img_name = '92.png'):
+    ''' saves the masked image to disk '''
+    # saving the masked image
+    xx = Image.fromarray(image); 
+    xx.show()
+    xx.save(path + label_val+ img_name, 'png')
+
+
+def remove_image_background(image, mask):
+    '''' Removes the (2D) image background according to the mask,
+    and returns the  the image as an array of RGB triplets '''
+    mask =  np.concatenate(mask)  # inpus mask is 2D array, output mask is a vector from concatnating the input 2D array
+    image_no_bkg = image.reshape(image.shape[0]*image.shape[1], 3)  # reshape to a vector with triplet values as entry, each row has R, G, B values
+    image_no_bkg = image_no_bkg[mask] # removing the background via the mask
+    return image_no_bkg
+
 def decompose_hue(labels, rgb_array_in):
     new_labels = -1*labels        
     MX = np.max(rgb_array_in, axis=1).astype(float)
     MN= np.min(rgb_array_in, axis=1).astype(float)
-    std_ms = 16*np.log( 1 + 255 * (MX-MN)*np.std(rgb_array_in, axis=1)  /(np.mean(rgb_array_in, axis=1)*(MX+MN)))    
-    
+    # std_ms = 8*np.log( 1 + 255 * (MX-MN)*np.std(rgb_array_in, axis=1)  /(np.mean(rgb_array_in, axis=1)*(MX+MN)))    
+    std_ms = 8*np.log( 1 + 255 * (MX-MN)*np.std(rgb_array_in, axis=1)  /(np.mean(rgb_array_in, axis=1)*(MX)))    
     next_label_id=0
     for labl in np.unique(labels):
         idexs = (labels==labl)
@@ -263,20 +290,3 @@ def ttest(x, idxs):
     
 
 
-# def merge_clusters_1(rgb_array_in, counts_from_cluster):
-#     rgb_array = rgb_array_in.copy() # we need to make a copy, and it has to be of float type to prevent overflow
-#     rgb_array = np.expand_dims(rgb_array, axis=0)
-#     hsv = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2HSV)
-#     hsv = np.squeeze(hsv, axis=0)        
-#     h_val=hsv[:, 0:1] # h_val = hsv[:, 0:1] # getting the h value to be used in clustering     
-#     result, ms = cluster_1D(h_val)    
-#     rgb_array = average_similar_colors_pix_cnt(rgb_array, counts_from_cluster, result['labels'])     
-    
-#     return rgb_array, result['labels']
-
-
-# std =  np.std(inp_vector)  
- # mean = np.mean(inp_vector) + 0.001  # the 0.0001 to prevent zero division  if the mean is 0
- # coeff_var = std/mean
- # print('cf',coeff_var, 'std', std, 'mean', mean, np.median(inp_vector) , np.max(inp_vector))
- # if np.max(inp_vector)-np.min(inp_vector) < 20:

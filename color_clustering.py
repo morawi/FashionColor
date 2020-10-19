@@ -19,9 +19,11 @@ import gc
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--num_colors", type=int, default=32, help="number of epochs of training")
+parser.add_argument("--max_num_colors", type=int, default=0, help="max number of colors the user wants")
 parser.add_argument("--dataset_name", type=str, default="ClothCoParse", help="name of the dataset: {ClothCoParse, or Modanet}")
 parser.add_argument("--HPC_run", default=False, type=lambda x: (str(x).lower() == 'true'), help="True/False; -default False; set to True if running on HPC")
 parser.add_argument('--save_fig_as_images', default=True, type=lambda x: (str(x).lower() == 'true'), help="True/False: default True; True uses a pretrained model")
+parser.add_argument('--color_upr_bound', default=True, type=lambda x: (str(x).lower() == 'true'), help="True/False: default True; True uses color upper bound for each item")
 parser.add_argument("--method", type=str, default="3D_1D", help="name of method: {3D_1D, or 3D}")
 # parser.add_argument("--lr", type=float, default=0.005, help="learning rate")
 
@@ -38,26 +40,29 @@ and incorrect results '''
 
 
 
-def generate_all_colors(dataset, cnf):    
+def generate_all_colors(dataset, class_names_and_colors, cnf):    
     all_persons_items = []    
     # ids  = range(len(dataset))
     ids = [271]
     ids = [58]
     #ids =[192]
     # ids = [323]
-    # ids = [833] # dress
+    ids = [833] # dress
     # ids = [121] # white shirt, gray pants, 
     # ids =[0]
-    # ids = [94]
+    ids = [94]
     # ids = [907]
-    ids = [737]
-    ids = [505]
+    # ids = [737]
+    # ids = [505]
     
     
     
     for i in ids:    
         image, masked_img, labels, image_id, masks, im_name = dataset[i]   
-        one_person_clothing_colors = color_extractor_obj(masks, labels, masked_img, cnf,
+        one_person_clothing_colors = color_extractor_obj(masks, labels, 
+                                                         masked_img, 
+                                                         cnf,
+                                                         class_names_and_colors,
                                                          image_name=im_name)                                                         
         
         fname = im_name if cnf.save_fig_as_images else None
@@ -66,7 +71,7 @@ def generate_all_colors(dataset, cnf):
     return all_persons_items, image
 
 
-def fill_color_table(dataset, cnf):        
+def fill_color_table(dataset, class_names, cnf):        
     ids = [271]
     # ids = [271, 58]
     # ids = range(0, 1002)
@@ -82,19 +87,21 @@ def fill_color_table(dataset, cnf):
         
     return color_table_obj
     
-
+cnf.color_upr_bound = True
 cnf.method = '3D_1D' # methods are: {'3D_1D'}  ... '3D' method is deleted, not so good
 cnf.num_colors = 17 # 20 # 16 # we perhapse need to use different set of colors depending on the item
+cnf.max_num_colors = cnf.num_colors if cnf.max_num_colors==0 else cnf.max_num_colors
 cnf.use_quantize = False
-cnf.clustering_method = 'gmm' # {'kmeans', 'fcmeans', 'gmm', 'find_K' }
-cnf.clsuter_1D_method='Diff'#  {'MeanSift', 'Diff', '2nd_fcm', 'None'}: for None, no 1D cluster will be applied
-dataset = get_dataset(cnf)
+cnf.find_k_clustering_method = 'gmm' # {'kmeans', 'gmm', 'None' }
+cnf.clustering_method = 'kmeans' # {'kmeans', 'fcmeans', 'gmm'}
+cnf.clsuter_1D_method='None'#  {'MeanSift', 'Diff', '2nd_fcm', 'None'}: for None, no 1D cluster will be applied
+dataset, class_names_and_colors = get_dataset(cnf)
 
 # obj = fill_color_table(dataset, cnf)
 # obj.build_table()
 # obj.analyze()
 print(cnf)
-x, image = generate_all_colors(dataset, cnf)
+x, image = generate_all_colors(dataset, class_names_and_colors, cnf)
 
 # cnf.method = '3D'
 # x, image = generate_all_colors(dataset, cnf)

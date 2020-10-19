@@ -6,7 +6,7 @@ Created on Thu Jun 18 17:45:22 2020
 
 """
 import numpy as np
-from clothcoparse_dataset import ImageDataset 
+from clothcoparse_dataset import ImageDataset, get_clothCoParse_class_names 
 from sklearn.cluster import MeanShift, estimate_bandwidth
 import cv2
 from collections import Counter
@@ -27,11 +27,13 @@ def get_dataset(opt):
                                 mode="train",                          
                                 HPC_run=opt.HPC_run,                                 
                             )
+        class_names_and_colors = get_clothCoParse_class_names()
+    
     # else:
     #     dataset = ModanetDataset("../data/%s" % opt.dataset_name, 
     #                              transforms_ = None,                             
     #                              HPC_run= opt.HPC_run, )
-    return dataset
+    return dataset, class_names_and_colors
 
 def mean_rgb_colors(c1, c2):
     ''' Calcluate the mean of two pixels based on their corresponding RGB values 
@@ -149,7 +151,7 @@ def differntial_1D_cluster(inp_vector):
     return labels
 
 
-def merge_clusters(rgb_array_in, counts_from_cluster, clsuter_1D_method = 'Diff'):
+def merge_clusters(rgb_array_in, counts_from_cluster, clsuter_1D_method = 'None'):
     ''' Merges the clusters in rgb_array_in based on cluster_1D_method  applied to the hue values of  rgb_array_in
     output-
           an rgb_array with the new labels, after taking the average based on the 1D clustering and the probablility of the simiilar labels '''

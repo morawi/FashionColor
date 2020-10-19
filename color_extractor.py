@@ -20,20 +20,25 @@ from color_utils import merge_clusters, RGB2HEX, remove_image_background # , sav
 from color_names import ColorNames
 from fcmeans import FCM
 from sklearn.mixture import GaussianMixture
+# from clothcoparse_dataset import get_clothCoParse_class_names # this function should be changed if using another dataset
 
 
 class ColorExtractor():
     ''' Extracts the colors of one person fashion items/clothing'''
-    def __init__(self, masks, labels, masked_img, cnf, 
+    def __init__(self, masks, labels, masked_img, cnf, class_names_and_colors,
                  image_name='', clustering_method='kmeans'):
         ''' Extracts the colors of one person fashion items/clothing'''
-        # inputed        
+        # input        
+        self.class_names_and_colors = class_names_and_colors
+        self.color_upr_bound = cnf.color_upr_bound
         self.number_of_colors = cnf.num_colors
         self.max_num_colors = cnf.max_num_colors
         self.labels = labels
         self.color_names_obj = ColorNames()
         self.clustering_method = cnf.clustering_method
         self.clsuter_1D_method = cnf.clsuter_1D_method
+        self.find_k_clustering_method = cnf.find_k_clustering_method
+        
         
         # computed values           
         self.item={}                  
@@ -49,7 +54,7 @@ class ColorExtractor():
             
             names_of_colors = [ self.color_names_obj.get_color_name(item) for item in  hex_colors]            
             pixel_counts_labels =[ str(int(np.round(100*item, 2)))+'%' for item in pixel_counts]   # color names from color_names class can be added here
-            print(names_of_colors)
+            print(label_val,': ', names_of_colors)
             plt.figure(figsize = figure_size)
             # plt.suptitle(label_val, fontsize=22)
             plt.pie(100*np.array(pixel_counts), labels = pixel_counts_labels, colors = hex_colors,
@@ -65,7 +70,9 @@ class ColorExtractor():
         plt.close()
    
     
-    def estimate_number_of_colors(self, image, no_clusters, clustering_method, label_val, plot_graph=True):
+    
+    def estimate_number_of_colors(self, image, no_clusters, clustering_method, label_val, clf_model, 
+                                  plot_graph=True ):
         ''' Use GMM to estimate the optimum num of colors
         We can also use prior probability by making use of the item label. For example, a belt is more likely to
         have one color.
@@ -73,24 +80,19 @@ class ColorExtractor():
         In addition, if the min estimated color value is far from the highest,
         we may select the min based on a threshold value 
         ''' 
+               
         gm_scores = np.array([])
-        for no_clusters_idx in range(1,no_clusters+1):
-            gmm = GaussianMixture(n_components=no_clusters_idx, 
-                                  n_init=1, # using more number of init is not good, will lead to overfitting
-                                  covariance_type = 'tied', # full, tied, spherical, diag
-                                  max_iter=100)
-            gmm.fit(image)
-            pred_labels  = gmm.predict(image)
-            counts = Counter(pred_labels)    
-            colors_centers = np.uint8(gmm.means_.round())
-            
-            gm_scores = np.append(gm_scores, abs(gmm.score(colors_centers)) ) 
+        
+        num_clusters = self.class_names_and_colors[label_val] if self.color_upr_bound else no_clusters
+        for no_clusters_idx in range(1,num_clusters+1):
+            counts, colors_centers, clf = clf_model(image, no_clusters_idx, label_val)                        
+            gm_scores = np.append(gm_scores, abs(clf.score(colors_centers)) ) 
             for i in range(0,len(counts)): 
                 if counts[i]==0: counts[i]=0 # if counts[i] does not exist (value 0 means it is empty), fill it with zero to prevent problems later                                   
         if plot_graph:
             plt.plot(gm_scores)           
             plt.rcParams.update({'font.size': 16})       
-            plt.xticks(np.arange(0, no_clusters,2), np.arange(1, no_clusters+1, 2))            
+            plt.xticks(np.arange(0, num_clusters,2), np.arange(1, num_clusters+1, 2))            
             plt.xlabel('\n K')
             plt.ylabel('Score: Average log-likelihood \n') 
             plt.title( label_val+' : #pixels ' + str(len(image)))
@@ -99,12 +101,10 @@ class ColorExtractor():
         '''TODO- Algorithm to get K (no of colors) based on label and gmm_scores
         
            we need to add estimating the number of colros based on label-value
-           logic, 
-           a purse is more probable to have 1 color
+           logic, a purse is more probable to have 1 color
            skin can be 2 color, then discard the min probability, this is 
            due to several color outlier, lipstick, mostache, etc.
-           etc.
-           '''
+           etc. '''
         
         first_min = np.argmin(gm_scores)
         second_min = np.argmin(gm_scores[gm_scores !=np.amin(gm_scores)])
@@ -115,6 +115,15 @@ class ColorExtractor():
             predicted_no_colors = first_min            
             
         predicted_no_colors = predicted_no_colors + 1 # since the array index starts in 0
+        
+        threshold_img_col = 100  # we need to better estimate this value, there seems to be a minimum number of samples to estimate the GMM        
+        if len(image)/predicted_no_colors < threshold_img_col:
+            print(len(image)/predicted_no_colors, 'below threshold', threshold_img_col)
+            predicted_no_colors = 1 
+            # when the number of pixels is low, estimation of number of colors might not be good
+            
+            
+            
         return predicted_no_colors        
         
         
@@ -128,44 +137,58 @@ class ColorExtractor():
         # https://pyro.ai/examples/gmm.html
         # This  is the best: 
         #    https://pypi.org/project/pycave/
-        gmm = GaussianMixture(n_components=no_clusters, 
+        gmm = GaussianMixture(n_components=no_clusters, random_state=1,
                                   n_init=2, # using more number of init is not good, will lead to overfitting
                                   covariance_type = 'tied',
                                   max_iter=100)
         gmm.fit(image)
         pred_labels  = gmm.predict(image)
-        counts = Counter(pred_labels)    
-        colors_centers = np.uint8(gmm.means_.round())
+        counts = Counter(pred_labels)
+        colors_centers = np.uint8(gmm.means_.round()) #  gmm.means_ # 
         for i in range(0,len(counts)): 
             if counts[i]==0: counts[i]=0 # if counts[i] does not exist (value 0, not sure whay this is happening), fill it with zero to prevent problems later            
-        return counts, colors_centers
+        return counts, colors_centers, gmm
+    
+    
+
+        
+    
+    def kmm_model(self, image, no_clusters,label_val):
+        ''' Runs k-means model and returns the colors and the counts (num of pixels) for each color '''
+        clf = KMeans(n_clusters = no_clusters, n_jobs=10, n_init=15, 
+                         random_state=1,
+                         tol=1e-4, max_iter=300, init='k-means++')
+                         # we are using higher number of max_iter and n_init for better convergence
+        pred_labels = clf.fit_predict(image)
+        counts = Counter(pred_labels)    
+        colors_centers = np.uint8(clf.cluster_centers_.round())
+        return counts, colors_centers, clf
         
         
     def get_colors_cluster(self, image, no_clusters, clustering_method, label_val): 
                 
-        counts=dict([]); colors_centers=[] # forward assignmet
+        
+        if self.find_k_clustering_method != 'None':   
+            clf = self.kmm_model if  self.find_k_clustering_method == 'kmeans'  else self.gmm_model
+            no_colors = self.estimate_number_of_colors(image, no_clusters, clustering_method, label_val, 
+                                                                 clf)
+            print('predicted no of colors', no_colors, '\n\n')  
+        else: 
+            no_colors = no_clusters            
+        
+        counts=dict([]); colors_centers=[] # forward assignmet                
         if clustering_method == 'kmeans':
-            clf = KMeans(n_clusters = no_clusters, n_jobs=10, n_init=15, 
-                         tol=1e-4, max_iter=300, init='k-means++')
-                         # we are using higher number of max_iter and n_init for better convergence
-            pred_labels = clf.fit_predict(image)
-            counts = Counter(pred_labels)    
-            colors_centers = np.uint8(clf.cluster_centers_.round())
+            counts, colors_centers,_ = self.kmm_model(image, no_colors, label_val)            
+        
+        elif clustering_method == 'gmm':  
+            counts, colors_centers,_ = self.gmm_model(image, no_colors, label_val)      
             
         elif clustering_method == 'fcmeans':
-            clf = FCM(n_clusters=no_clusters)
+            clf = FCM(n_clusters = no_colors)
             clf.fit(image)                      
             pred_labels  = clf.predict(image)
             counts = Counter(pred_labels)    
             colors_centers = np.uint8(clf.centers.round())        
-       
-        elif clustering_method == 'gmm':  
-            counts, colors_centers = self.gmm_model(image, no_clusters, label_val)            
-            
-        elif clustering_method == 'find_K':   
-            predicted_no_colors = self.estimate_number_of_colors(image, no_clusters, clustering_method, label_val)
-            print('predicted no of colors', predicted_no_colors, '\n\n')            
-            counts, colors_centers = self.gmm_model(image, predicted_no_colors, label_val)
                     
         else: 
             print('Error choosing clustering method')
@@ -178,7 +201,11 @@ class ColorExtractor():
         ''' Find the average of similar colors according to hue value
             returns the grouped (final) colors, and the pixel sum in each color
         '''        
-        grouped_centers, grouped_labels = merge_clusters(colors_centers, counts_from_cluster, self.clsuter_1D_method)
+        if len(counts_from_cluster)> 1:         
+            grouped_centers, grouped_labels = merge_clusters(colors_centers, counts_from_cluster, self.clsuter_1D_method)
+        else:
+            grouped_centers, grouped_labels = merge_clusters(colors_centers, counts_from_cluster) # None cluster_1D_method will be used
+            
         counts_from_cluster = dict(counts_from_cluster.most_common()) # should this be put here or before????
         numpixels =  np.zeros(len(counts_from_cluster), dtype = 'float'); updated_labels = []
         colors_= np.zeros(grouped_centers.shape, dtype = 'uint8')      
@@ -209,7 +236,7 @@ class ColorExtractor():
         thus, retaining 10 other colors out of 20 '''
         
         #  pixels sums and corresponding colors
-        colr_cutoff_probability = 0.1 if self.clustering_method == 'gmm' else 0.5
+        colr_cutoff_probability = 0.5 # if self.clustering_method == 'gmm' else 0.5
         numpixels_and_colors = []
         total_sum = 0
         
@@ -225,9 +252,9 @@ class ColorExtractor():
         
         # find the updated probability
         for i in sorted_indxs:
-            if pixsum[i]*self.max_num_colors > colr_cutoff_probability: 
-                
+            if pixsum[i]*self.max_num_colors > colr_cutoff_probability:                 
                 numpixels_and_colors.append([pixsum[i]/total_sum, colors_grouped[i]])   
+                
         return numpixels_and_colors
     
     
@@ -239,12 +266,13 @@ class ColorExtractor():
         if and only if max_num_colors equals number_of_colors   '''
         
         for class_id, label_val in enumerate(self.labels):              
-            print(label_val)            
             
             image  = masked_img[class_id]           
             image_no_bkg = remove_image_background(image, mask = masks[class_id])
             # save_masked_image(image, label_val, path= 'C:/MyPrograms/FashionColor/Experiments/', img_name = 'tmp.png')
-             
+            
+            
+            
             # use clustering to reduce the number of colors
             if len(image_no_bkg) < self.number_of_colors:
                 no_clusters = len(image_no_bkg)
@@ -253,14 +281,24 @@ class ColorExtractor():
                                                                           no_clusters=no_clusters,
                                                                           clustering_method = self.clustering_method,
                                                                           label_val=label_val)            
+            
+            # finding the percentage of each color; the probability of each color
+            use_num_pixels_percentage = True 
+            num_pixels_in_mask = np.sum(masks[class_id]) if use_num_pixels_percentage else 1
+            for i, key in enumerate(counts_from_cluster.keys()): 
+                counts_from_cluster[i] =  counts_from_cluster[i]/num_pixels_in_mask 
+
              
-            pixsum, colors_grouped = self.get_colors_via_hue(colors_centers, counts_from_cluster)                
+            pixsum, colors_grouped = self.get_colors_via_hue(colors_centers, counts_from_cluster)
+            
+
+            
             numpixels_and_colors = self.remove_low_probability_colors(pixsum, colors_grouped)            
             self.item[label_val] = numpixels_and_colors
         
             
     def find_colors_via_quantize(self, masked_img, number_of_colors, max_num_colors, image):
-        for j in range(len(self.labels)):            
+        for j in range(len(self.labels)):    
             image = Image.fromarray(masked_img[j])
             x_img = image.quantize(colors=number_of_colors, method=None, kmeans=0, palette=None)
             z = x_img.convert('RGB').getcolors()
@@ -278,10 +316,5 @@ class ColorExtractor():
 
 # This is not be needed, as the normalization will be don in get_colors_via_hue even if 
 # the option is None (no hue grouping)
-# # # finding the percentage of each color; the probability of each color
-# use_num_pixels_percentage = True 
-# num_pixels_in_mask = np.sum(masks[class_id]) if use_num_pixels_percentage else 1
-# for i, key in enumerate(counts_from_cluster.keys()): 
-#     counts_from_cluster[i] =  counts_from_cluster[i]/num_pixels_in_mask 
    
 

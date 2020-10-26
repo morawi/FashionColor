@@ -12,6 +12,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import colors
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
 
 
 ''' 
@@ -27,39 +28,60 @@ Select rows by boolean vector	df[bool_vec]	DataFrame
 
 '''
 
-# colr_names = ['colr1', 'colr2', 'colr3', 'colr4']; 
+# colr_names = ['colr1', 'colr2', 'colr3', 'colr4']
 
 class ColorTable():
-    ''' Arrange the colors of fashion items/clothing into a pandas table'''
-    def __init__(self, class_names, cnf):
-        self.max_mumber_of_colors = cnf.max_num_colors
-        fashion_items = ['im_name'] + class_names # add image name here        
-        self.df = pd.DataFrame([(None,)* len(fashion_items)], columns = fashion_items,  index=[]) # Constructing the dataframe
+    ''' Arranges colors of fashion/clothing items into a pandas table. 
+    Each outfit is stored into a single table. Tables of several outfits can be appended '''
+    def __init__(self, class_names=None, max_num_colors=None, 
+                 fashion_obj_name='season20-21'):
+        if class_names != None:
+            self.max_mumber_of_colors = max_num_colors
+            fashion_items = ['im_name'] + class_names # add image name here        
+            self.df = pd.DataFrame([(None,)* len(fashion_items)], 
+                                   columns = fashion_items,  index=[]) # Constructing the dataframe
         self.data_dict = {}
-        self.num_items = 0
-        
-        
+        self.obj_name = fashion_obj_name
+        # nself.num_entries = 0  # each person outfit has one entry / instance                 
                 
-    def check(self):
+    def save(self, fname, path = 'C:/MyPrograms/FashionColor/ColorFiles/'):
+        '''  save data_dict to file  '''               
         
+        with open(path+fname, 'wb') as fp:
+            pickle.dump(self.data_dict, fp, protocol=pickle.HIGHEST_PROTOCOL)
+        # with open('data.json', 'w') as fp:
+        #     json.dump(data, fp)
+                
+        
+    def load(self, fname, path = 'C:/MyPrograms/FashionColor/ColorFiles/'):   
+        with open(path+fname, 'rb') as fp:
+            self.data_dict = pickle.load(fp)
+                      
+    
+    def update(self, color_object):
+        self.data_dict.update(color_object.data_dict)
+    
+    def check(self):
+        ''' TODO '''        
         return 10
     
     
     def append(self, item={'bag':[(40, 66, 93), (1, 2, 99)],'jacket' : (9, 0, 9) , 'pants' : (255,255, 255)}):
+        '''the default item is some trivial input, used to show the user how to do use append '''
         self.df = self.df.append(item.item , ignore_index=True) 
-        self.num_items +=1
-        
+        # self.num_entries +=1 # no need for this
+    
         
     def __getitem__(self, index): # example, index = [0, 4], first and 5th rows; e.g.  x[[0,1]] where x is a color_table object
         # return self.df.iloc[index]
         return self.data_dict
     
-    def __len__(self):
-        return self.num_items
+    # def __len__(self): # the length is not fixed, sometimes we have 1 pants, 2 shirts 
+    #     return # self.num_entries
     
     def get_cnt_color_as_df(self, all_rows_items, img_names):
-        colr_names = ['colr_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the colors of one item (e.g. skirt) for all clients
-        pix_cnt_names = ['px_cnt_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the pixel counts for one item(e.g. skirt) for all clients                    
+        colr_names = ['color_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the colors of one item (e.g. skirt) for all clients
+        pix_cnt_names = ['pxl_prob_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the pixel counts for one item(e.g. skirt) for all clients                    
         colr_df = pd.DataFrame([(None,)*len(colr_names)], columns = colr_names,  index=[]) # Constructing the dataframe
         pix_cnt_df = pd.DataFrame([(None,)*len(pix_cnt_names)], columns = pix_cnt_names,  index=[]) # Constructing the dataframe
         
@@ -83,10 +105,34 @@ class ColorTable():
             
         return pix_cnt_df, colr_df
 
-    
+        
     def build_table(self): 
-        ''' This function builds a table so that colors are stored in a DataFraem 
-        for each clothing item ''' 
+        ''' This function builds a table so that colors are stored in a DataFraem, 
+            done for each clothing item ''' 
+    
+        if self.df.empty:        
+            print('Error: There are no data to fill the table. Use append() \
+                   to add data.')                   
+            return 0
+         
+        pix_cnt_df={}; colr_df ={}        
+        for i, key in enumerate(self.df): # key here is fashion item, e.g. skirt, dress, etc                 
+            idx = self.df[key].notna() # indices for all clients that are not None
+            if key == 'im_name' or key == 'background' or not(idx.any()): continue                                    
+            pix_cnt_df[self.df['im_name'][idx]], colr_df[self.df['im_name'][idx]] = self.get_cnt_color_as_df(self.df[key][idx], key)
+            
+            ''' pix_cnt, colr, and img_names have one to one correspondence '''
+        self.data_dict['pix_cnt_df'] = pix_cnt_df
+        self.data_dict['colr_df'] = colr_df
+        self.data_dict['obj_name'] = self.obj_name
+                       
+        print('Calling build_table(). Warning: This will build the table based on each item.\nThe original DataFrame containing the information will be cleared to save memory.')
+        self.df = self.df[0:0] # Now, let's free the memory used by df
+        gc.collect() # garbage collection after deletion
+        
+    def build_table_old(self): 
+        ''' This function builds a table so that colors are stored in a DataFraem, 
+            done for each clothing item ''' 
     
         if self.df.empty:        
             print('Error: There are no data to fill the table. Use append() \
@@ -103,19 +149,20 @@ class ColorTable():
             ''' pix_cnt, colr, and img_names have one to one correspondence '''
         self.data_dict['pix_cnt_df'] = pix_cnt_df
         self.data_dict['colr_df'] = colr_df
+        self.data_dict['obj_name'] = self.obj_name
                        
         print('Calling build_table(). Warning: This will build the table based on each item.\nThe original DataFrame containing the information will be cleared to save memory.')
         self.df = self.df[0:0] # Now, let's free the memory used by df
-        gc.collect() # garbage collection after deletion
-        
-        
+        gc.collect() # garbage collection after deletion    
                     
     def analyze(self):
+        ''' This function can be used to build the color distributions of each 
+        clothing item ... This function should be called after calling build_table() '''
         if self.data_dict=={}:
             print('you need to run build_table() to generate the data used in the analysis')
             return 0
         
-        # color analysis:
+        # color analysis
         L1_clr_nm = 'colr_df'  # color group 
         L1_cnt_nm = 'pix_cnt_df'  # pixel count group ... both group have one to one correspondence
         for L2_item_nm in  self.data_dict[L1_clr_nm].keys(): # L2_KEYS          

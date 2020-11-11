@@ -6,15 +6,23 @@ Created on Sun Apr 12 17:12:45 2020
 
 Color Clustering
 
+https://mattdickenson.com/2018/11/18/gmm-python-pyro/
+https://github.com/mcdickenson/em-gaussian/blob/master/em-gaussian-pyro.py
+https://pyro.ai/examples/dirichlet_process_mixture.html
+https://pyro.ai/examples/gmm.html
+https://scikit-learn.org/stable/auto_examples/mixture/plot_concentration_prior.html#sphx-glr-auto-examples-mixture-plot-concentration-prior-py
+
 """
 
 import argparse
 import platform
 from color_extractor import ColorExtractor as color_extractor_obj
+from clothcoparse_dataset import get_clothCoParse_class_names 
+from prepare_data import get_ClothCoP_images_as_pack, get_images_from_wardrobe
 from color_utils import get_dataset
 from color_table import ColorTable
 import gc
-
+import time
 
 parser = argparse.ArgumentParser()
 
@@ -40,73 +48,97 @@ and incorrect results '''
 
 
 
-def generate_all_colors(dataset, class_names_and_colors, cnf):    
-    all_persons_items = []    
+def extract_colors(cnf):    
+    dataset, class_names_and_colors = get_dataset(cnf)
+    
     # ids  = range(len(dataset))
     ids = [271]
-    ids = [58]
+    #ids = [58]
     #ids =[192]
     # ids = [323]
-    ids = [833] # dress
+    # ids = [833] # dress
     # ids = [121] # white shirt, gray pants, 
     # ids =[0]
-    ids = [94]
+    # ids = [94]
     # ids = [907]
     # ids = [737]
-    # ids = [505]
+    # ids = [505]    
     
-    
-    
+    all_persons_items = []    
     for i in ids:    
-        image, masked_img, labels, image_id, masks, im_name = dataset[i]   
-        one_person_clothing_colors = color_extractor_obj(masks, labels, 
-                                                         masked_img, 
-                                                         cnf,
+        image, masked_img, labels, image_id, masks, img_name = dataset[i]   
+        data_pack = get_ClothCoP_images_as_pack(masks, masked_img, labels, img_name)        
+        one_person_clothing_colors = color_extractor_obj(cnf,  
                                                          class_names_and_colors,
-                                                         image_name=im_name)                                                         
-        
-        fname = im_name if cnf.save_fig_as_images else None
+                                                         data_pack)
+        fname = data_pack['img_name'] if cnf.save_fig_as_images else None
         one_person_clothing_colors.pie_chart(image, fname=fname, figure_size=(4, 4))
         all_persons_items.append(one_person_clothing_colors)
     return all_persons_items, image
 
 
-def fill_color_table(dataset, class_names, cnf):        
-    ids = [271]
-    # ids = [271, 58]
-    # ids = range(0, 1002)
-    color_table_obj = ColorTable(dataset.class_names, cnf)    
-    for i in ids: 
-   #  for i, data_item in enumerate(dataset):        
-        print('processing person', i)
-        image, masked_img, labels, image_id, masks, im_name = dataset[i]   
-        one_person_clothing_colors = color_extractor_obj(masks, labels, masked_img,  cnf,                                                   
-                                                         image_name = im_name)
-                                                           
+def fill_ClothCoP_color_table(cnf, out_file = 'ref_clothCoP.pkl'):    
+    dataset, class_names_and_colors = get_dataset(cnf)    
+    # ids = [271, 58, 371, 192]     
+    ids = range(4, 1002) # all images
+    
+    color_table_obj = ColorTable(dataset.class_names, cnf.max_num_colors)    
+    for i in ids: #  for i, data_item in enumerate(dataset):        
+        print('processing person/catalogue', i)
+        image, masked_img, labels, image_id, masks, img_name = dataset[i]   
+        data_pack = get_ClothCoP_images_as_pack(masks, masked_img, labels, img_name)
+        one_person_clothing_colors = color_extractor_obj(cnf,  
+                                                         class_names_and_colors,
+                                                         data_pack)                                                           
         color_table_obj.append(one_person_clothing_colors)
+    color_table_obj.build_table()
+    color_table_obj.save(out_file)
+    # obj.analyze() # draw color distributions
+        
+    return color_table_obj
+
+
+def fill_and_build_wardrobe_color_table(cnf, user_name='malrawi'):  
+    print('processing wardrobe of' , user_name)
+    class_names_and_colors = get_clothCoParse_class_names()  
+    class_names = list(get_clothCoParse_class_names().keys())
+    color_table_obj = ColorTable(class_names, cnf.max_num_colors)  
+    data_pack = get_images_from_wardrobe(user_name= user_name)
+    for d_pack in data_pack:
+        wardrobe_clothing_colors = color_extractor_obj(cnf,  
+                                                     class_names_and_colors,
+                                                     d_pack)                                                           
+        color_table_obj.append(wardrobe_clothing_colors)
+    color_table_obj.build_table()
+    color_table_obj.save(user_name+'.pkl')
         
     return color_table_obj
     
-cnf.color_upr_bound = True
-cnf.method = '3D_1D' # methods are: {'3D_1D'}  ... '3D' method is deleted, not so good
-cnf.num_colors = 17 # 20 # 16 # we perhapse need to use different set of colors depending on the item
-cnf.max_num_colors = cnf.num_colors if cnf.max_num_colors==0 else cnf.max_num_colors
+cnf.color_upr_bound = True # when True, extracted colors will be bounded by an upper bound, like, for skin; num of colors will be 1 and for dress will be high, like 17 
+cnf.num_colors = 17 # 20 # 16 # we perhapse need to use different set of colors depending on the item ... this is used for clustering if find_no_clusters_method is not usede
+cnf.max_num_colors = cnf.num_colors if cnf.max_num_colors==0 else cnf.max_num_colors # we can reduce the number of clusters according to this upper value, regardless of the number of clusters 
 cnf.use_quantize = False
-cnf.find_k_clustering_method = 'gmm' # {'kmeans', 'gmm', 'None' }
-cnf.clustering_method = 'kmeans' # {'kmeans', 'fcmeans', 'gmm'}
-cnf.clsuter_1D_method='None'#  {'MeanSift', 'Diff', '2nd_fcm', 'None'}: for None, no 1D cluster will be applied
-dataset, class_names_and_colors = get_dataset(cnf)
+cnf.find_no_clusters_method = 'None' # {'kmeans', 'gmm', 'bgmm', 'None' } # bgmm=Bayes GMM
+cnf.clustering_method = 'kmeans'  # {'kmeans', 'fcmeans', 'gmm', 'bgmm'}
+cnf.clsuter_1D_method='Diff'  # {'MeanSift', 'Diff', '2nd_fcm', 'None'}: for None, no 1D cluster will be applied
 
-# obj = fill_color_table(dataset, cnf)
-# obj.build_table()
-# obj.analyze()
 print(cnf)
-x, image = generate_all_colors(dataset, class_names_and_colors, cnf)
+cnf.action = ['build color catalogue', 'build color from user wardrobe']
+cnf.action = cnf.action[0]
+tic = time.time()
 
-# cnf.method = '3D'
-# x, image = generate_all_colors(dataset, cnf)
-# # x[0][0]['skin']
+if cnf.action == 'build color catalogue': 
+    obj = fill_ClothCoP_color_table(cnf, out_file = 'ref_clothCoP.pkl')
+else: 
+    obj_user = fill_and_build_wardrobe_color_table(cnf, user_name='malrawi')
+    
 
+# obj2 = ColorTable() 
+# obj2.load('test.pkl')
+
+
+# x, image = extract_colors(dataset, class_names_and_colors, cnf)
+print('Elapsed time is:', time.time()-tic)
 gc.collect()
 
-
+# x[0][0]['skin']

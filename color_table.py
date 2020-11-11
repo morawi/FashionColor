@@ -69,8 +69,7 @@ class ColorTable():
     def append(self, item={'bag':[(40, 66, 93), (1, 2, 99)],'jacket' : (9, 0, 9) , 'pants' : (255,255, 255)}):
         '''the default item is some trivial input, used to show the user how to do use append '''
         self.df = self.df.append(item.item , ignore_index=True) 
-        # self.num_entries +=1 # no need for this
-    
+            
         
     def __getitem__(self, index): # example, index = [0, 4], first and 5th rows; e.g.  x[[0,1]] where x is a color_table object
         # return self.df.iloc[index]
@@ -79,27 +78,41 @@ class ColorTable():
     # def __len__(self): # the length is not fixed, sometimes we have 1 pants, 2 shirts 
     #     return # self.num_entries
     
-    def get_cnt_color_as_df(self, all_rows_items, img_names):
+    
+    
+    def get_cnt_color_as_df(self, all_item_names, index_val):        
         colr_names = ['color_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the colors of one item (e.g. skirt) for all clients
         pix_cnt_names = ['pxl_prob_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the pixel counts for one item(e.g. skirt) for all clients                    
         colr_df = pd.DataFrame([(None,)*len(colr_names)], columns = colr_names,  index=[]) # Constructing the dataframe
         pix_cnt_df = pd.DataFrame([(None,)*len(pix_cnt_names)], columns = pix_cnt_names,  index=[]) # Constructing the dataframe
         
-        colr_df.index = colr_df.index.map(str)
-        pix_cnt_df.index = pix_cnt_df.index.map(str)
-
-        for jj, one_column_item in enumerate(all_rows_items): # '''idx has all clie key, key could be skirt, belt, dress, etc '''                        
-            pix_cnt_color = dict(one_column_item) #  ''' each per_col_item has max_mumber_of_colrs  defined as pixel_count, followed by the color value '''
+               
+        #for jj, one_column_item in enumerate(all_row_items): # '''idx has all clie key, key could be skirt, belt, dress, etc '''                       
+        item_name_final = []
+        for item_name in all_item_names: 
+            item = self.df.loc[index_val][item_name]                
+            if not isinstance(item, list): continue # if not a list, it is  if  pd.isnull(item): continue
+            
+            pix_cnt_color = dict(item) #  ''' each per_col_item has max_mumber_of_colrs  defined as pixel_count, followed by the color value '''
             pix_cnt = [*pix_cnt_color] # pix_cnt_color.keys() # these are pixel counts
             colors = [*pix_cnt_color.values()] # these are the colors corresponding to each pixel count
             
-            pix_cnt = pix_cnt + [None] * (self.max_mumber_of_colors - len(pix_cnt)) # filling missing values wiht None if any
+            ff=float('nan')        
+            # pix_cnt = pix_cnt + [None] * (self.max_mumber_of_colors - len(pix_cnt)) # filling missing values wiht None if any
+            pix_cnt = pix_cnt + [ff] * (self.max_mumber_of_colors - len(pix_cnt)) # filling missing values wiht None if any
             pix_cnt_df.loc[len(pix_cnt_df)] = pix_cnt
             
-            colors = colors + [None] * (self.max_mumber_of_colors - len(colors)) # filling missing values wiht None if any
+            z = np.array([ff,ff,ff])
+            # colors = colors + [None] * (self.max_mumber_of_colors - len(colors)) # filling missing values wiht None if any
+            colors = colors + [z] * (self.max_mumber_of_colors - len(colors)) # filling missing values wiht None if any
             colr_df.loc[len(colr_df)] = colors
-        colr_df.index = img_names
-        pix_cnt_df.index = img_names
+            item_name_final.append(item_name)
+        
+        colr_df.index = colr_df.index.map(str) # making the index as a tring
+        pix_cnt_df.index = pix_cnt_df.index.map(str) # making the index as a tring
+        
+        colr_df.index    = item_name_final
+        pix_cnt_df.index = item_name_final
         ''' - To access one row, we use: colr_df.loc['0272.jpg'], where '0272.jpg' is the image name index
             - To acess one point at a specific row and column we can use, colr_df['colr_0']['0272.jpg']  '''
             
@@ -108,18 +121,21 @@ class ColorTable():
         
     def build_table(self): 
         ''' This function builds a table so that colors are stored in a DataFraem, 
-            done for each clothing item ''' 
+            Done for each clothing item ''' 
     
         if self.df.empty:        
-            print('Error: There are no data to fill the table. Use append() \
-                   to add data.')                   
+            print('Error: There are no data to fill the table. Use append() to add data.')                   
             return 0
          
         pix_cnt_df={}; colr_df ={}        
-        for i, key in enumerate(self.df): # key here is fashion item, e.g. skirt, dress, etc                 
-            idx = self.df[key].notna() # indices for all clients that are not None
-            if key == 'im_name' or key == 'background' or not(idx.any()): continue                                    
-            pix_cnt_df[self.df['im_name'][idx]], colr_df[self.df['im_name'][idx]] = self.get_cnt_color_as_df(self.df[key][idx], key)
+        for i in range(len(self.df)): # key here is fashion item, e.g. skirt, dress, etc                 
+            idx = self.df.loc[i].notna() # indices for all clients that are not None
+            idx_of_items = idx[2:] # starging from 2 to ignore image_name and background
+            if not(idx.any()): 
+                continue            
+            img_name = self.df.loc[i]['im_name']            
+            all_item_names = idx_of_items.keys().to_list()
+            pix_cnt_df[img_name], colr_df[img_name] = self.get_cnt_color_as_df(all_item_names, i)      
             
             ''' pix_cnt, colr, and img_names have one to one correspondence '''
         self.data_dict['pix_cnt_df'] = pix_cnt_df
@@ -130,32 +146,8 @@ class ColorTable():
         self.df = self.df[0:0] # Now, let's free the memory used by df
         gc.collect() # garbage collection after deletion
         
-    def build_table_old(self): 
-        ''' This function builds a table so that colors are stored in a DataFraem, 
-            done for each clothing item ''' 
     
-        if self.df.empty:        
-            print('Error: There are no data to fill the table. Use append() \
-                   to add data.')                   
-            return 0
-         
-        pix_cnt_df={}; colr_df ={}        
-        for i, key in enumerate(self.df): # key here is fashion item, e.g. skirt, dress, etc                 
-            idx = self.df[key].notna() # indices for all clients that are not None
-            if key == 'im_name' or key == 'background' or not(idx.any()): continue                                    
-            pix_cnt_df[key], colr_df[key] = self.get_cnt_color_as_df(self.df[key][idx], 
-                                                                     self.df['im_name'][idx])
-            
-            ''' pix_cnt, colr, and img_names have one to one correspondence '''
-        self.data_dict['pix_cnt_df'] = pix_cnt_df
-        self.data_dict['colr_df'] = colr_df
-        self.data_dict['obj_name'] = self.obj_name
-                       
-        print('Calling build_table(). Warning: This will build the table based on each item.\nThe original DataFrame containing the information will be cleared to save memory.')
-        self.df = self.df[0:0] # Now, let's free the memory used by df
-        gc.collect() # garbage collection after deletion    
-                    
-    def analyze(self):
+    def analyze(self): # TODO ... need to update it as the inxex and items have been sawpped by me
         ''' This function can be used to build the color distributions of each 
         clothing item ... This function should be called after calling build_table() '''
         if self.data_dict=={}:
@@ -240,3 +232,123 @@ class ColorTable():
 
 # df = df.replace(r'^\s*$', np.nan, regex=True) # replacing None with Nan, if needed
 # df = pd.DataFrame(students, columns = ['Jacket' , 'Pants', 'Blouse' , 'Dress'] ) # ,  index=['a', 'b'])
+
+   
+    
+    # def get_cnt_color_as_df_old2(self, item, item_name):        
+    #     colr_names = ['color_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the colors of one item (e.g. skirt) for all clients
+    #     pix_cnt_names = ['pxl_prob_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the pixel counts for one item(e.g. skirt) for all clients                    
+    #     colr_df = pd.DataFrame([(None,)*len(colr_names)], columns = colr_names,  index=[]) # Constructing the dataframe
+    #     pix_cnt_df = pd.DataFrame([(None,)*len(pix_cnt_names)], columns = pix_cnt_names,  index=[]) # Constructing the dataframe
+        
+    #     colr_df.index = colr_df.index.map(str) # making the index as a tring
+    #     pix_cnt_df.index = pix_cnt_df.index.map(str) # making the index as a tring
+               
+    #     #for jj, one_column_item in enumerate(all_row_items): # '''idx has all clie key, key could be skirt, belt, dress, etc '''                        
+    #     pix_cnt_color = dict(item) #  ''' each per_col_item has max_mumber_of_colrs  defined as pixel_count, followed by the color value '''
+    #     pix_cnt = [*pix_cnt_color] # pix_cnt_color.keys() # these are pixel counts
+    #     colors = [*pix_cnt_color.values()] # these are the colors corresponding to each pixel count
+        
+    #     ff=float('nan')        
+    #     # pix_cnt = pix_cnt + [None] * (self.max_mumber_of_colors - len(pix_cnt)) # filling missing values wiht None if any
+    #     pix_cnt = pix_cnt + [ff] * (self.max_mumber_of_colors - len(pix_cnt)) # filling missing values wiht None if any
+    #     pix_cnt_df.loc[len(pix_cnt_df)] = pix_cnt
+        
+    #     z = np.array([ff,ff,ff])
+    #     # colors = colors + [None] * (self.max_mumber_of_colors - len(colors)) # filling missing values wiht None if any
+    #     colors = colors + [z] * (self.max_mumber_of_colors - len(colors)) # filling missing values wiht None if any
+    #     colr_df.loc[len(colr_df)] = colors
+    
+    #     colr_df.index    = [item_name]
+    #     pix_cnt_df.index = [item_name]
+    #     ''' - To access one row, we use: colr_df.loc['0272.jpg'], where '0272.jpg' is the image name index
+    #         - To acess one point at a specific row and column we can use, colr_df['colr_0']['0272.jpg']  '''
+            
+    #     return pix_cnt_df, colr_df
+
+    
+    
+    # def build_table_old2(self): 
+    #     ''' This function builds a table so that colors are stored in a DataFraem, 
+    #         Done for each clothing item ''' 
+    
+    #     if self.df.empty:        
+    #         print('Error: There are no data to fill the table. Use append() \
+    #                to add data.')                   
+    #         return 0
+         
+    #     pix_cnt_df={}; colr_df ={}        
+    #     for i in range(len(self.df)): # key here is fashion item, e.g. skirt, dress, etc                 
+    #         idx = self.df.loc[i].notna() # indices for all clients that are not None
+    #         idx_of_items = idx[2:] # starging from 2 to ignore image_name and background
+    #         if not(idx.any()): continue            
+    #         im_name = self.df.loc[i]['im_name']   
+    #         for item_name in idx_of_items.keys(): 
+    #             item = self.df.loc[i][item_name]                
+    #             if not isinstance(item, list): continue # if not a list, it is  if  pd.isnull(item): continue
+    #             pix_cnt_df[im_name], colr_df[im_name] = self.get_cnt_color_as_df(item, item_name)      
+            
+    #         ''' pix_cnt, colr, and img_names have one to one correspondence '''
+    #     self.data_dict['pix_cnt_df'] = pix_cnt_df
+    #     self.data_dict['colr_df'] = colr_df
+    #     self.data_dict['obj_name'] = self.obj_name
+                       
+    #     print('Calling build_table(). Warning: This will build the table based on each item.\nThe original DataFrame containing the information will be cleared to save memory.')
+    #     self.df = self.df[0:0] # Now, let's free the memory used by df
+    #     gc.collect() # garbage collection after deletion
+    
+    
+    
+    # def get_cnt_color_as_df_old(self, all_rows_items, img_names):
+    #     colr_names = ['color_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the colors of one item (e.g. skirt) for all clients
+    #     pix_cnt_names = ['pxl_prob_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the pixel counts for one item(e.g. skirt) for all clients                    
+    #     colr_df = pd.DataFrame([(None,)*len(colr_names)], columns = colr_names,  index=[]) # Constructing the dataframe
+    #     pix_cnt_df = pd.DataFrame([(None,)*len(pix_cnt_names)], columns = pix_cnt_names,  index=[]) # Constructing the dataframe
+        
+    #     colr_df.index = colr_df.index.map(str)
+    #     pix_cnt_df.index = pix_cnt_df.index.map(str)
+
+    #     for jj, one_column_item in enumerate(all_rows_items): # '''idx has all clie key, key could be skirt, belt, dress, etc '''                        
+    #         pix_cnt_color = dict(one_column_item) #  ''' each per_col_item has max_mumber_of_colrs  defined as pixel_count, followed by the color value '''
+    #         pix_cnt = [*pix_cnt_color] # pix_cnt_color.keys() # these are pixel counts
+    #         colors = [*pix_cnt_color.values()] # these are the colors corresponding to each pixel count
+            
+    #         pix_cnt = pix_cnt + [None] * (self.max_mumber_of_colors - len(pix_cnt)) # filling missing values wiht None if any
+    #         pix_cnt_df.loc[len(pix_cnt_df)] = pix_cnt
+            
+    #         colors = colors + [None] * (self.max_mumber_of_colors - len(colors)) # filling missing values wiht None if any
+    #         colr_df.loc[len(colr_df)] = colors
+    #     colr_df.index = img_names
+    #     pix_cnt_df.index = img_names
+    #     ''' - To access one row, we use: colr_df.loc['0272.jpg'], where '0272.jpg' is the image name index
+    #         - To acess one point at a specific row and column we can use, colr_df['colr_0']['0272.jpg']  '''
+            
+    #     return pix_cnt_df, colr_df
+
+
+#   def build_table_old(self): 
+    #     ''' This function builds a table so that colors are stored in a DataFraem, 
+    #         done for each clothing item ''' 
+    
+    #     if self.df.empty:        
+    #         print('Error: There are no data to fill the table. Use append() \
+    #                to add data.')                   
+    #         return 0
+         
+    #     pix_cnt_df={}; colr_df ={}        
+    #     for i, key in enumerate(self.df): # key here is fashion item, e.g. skirt, dress, etc                 
+    #         idx = self.df[key].notna() # indices for all clients that are not None
+    #         if key == 'im_name' or key == 'background' or not(idx.any()): continue                                    
+    #         pix_cnt_df[key], colr_df[key] = self.get_cnt_color_as_df(self.df[key][idx], 
+    #                                                                  self.df['im_name'][idx])
+            
+    #         ''' pix_cnt, colr, and img_names have one to one correspondence '''
+    #     self.data_dict['pix_cnt_df'] = pix_cnt_df
+    #     self.data_dict['colr_df'] = colr_df
+    #     self.data_dict['obj_name'] = self.obj_name
+                       
+    #     print('Calling build_table(). Warning: This will build the table based on each item.\nThe original DataFrame containing the information will be cleared to save memory.')
+    #     self.df = self.df[0:0] # Now, let's free the memory used by df
+    #     gc.collect() # garbage collection after deletion    
+                    
+

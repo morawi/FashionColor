@@ -46,7 +46,9 @@ class ColorMatching():
     def remove_nans_from_numpy(self, inp):
         ''' Removing nan's from a numpy array, will always return a 1D array 
         even if the input is 2D or 3D '''
-        return inp[~np.isnan(inp)]
+        return inp[~np.isnan(inp)] # return inp[~np.isnan(inp).any(axis=1)] # this keeps the 2D structure
+        
+                
 
     
     def sort_and_store_record(self, dist_metric, catalogue_name, num_best_maches):
@@ -80,38 +82,72 @@ class ColorMatching():
         
     
               
-    def find_e_distance(self,c_ref, p_ref, c_query,p_query, n_val=0 ):
-        ''' $$
-            e_{ij}(\text{s(group)}, \text{ground_truth}) = \frac{|p_i-P_j| |a_i - A_j|}{(p_i+P_j)^n}
+    def find_e_distance_new(self, c_ref, p_ref, c_query, p_query, n_val=0 ):
+        ''' $$e_{ij}(\text{s(group)}, \text{ground_truth}) = \frac{|p_i*P_j| |a_i - A_j|}{(p_i+P_j)^n}
             
-            e_{ij}(\text{s(group)}, \text{ground_truth}) = \frac{|p_i-P_j| |a_i - A_j|}{(p_i+P_j)^n}
-            $$
+            e_{ij}(\text{s(group)}, \text{ground_truth}) = \frac{|p_i*P_j| |a_i - A_j|}{(p_i+P_j)^n}
+            $$            
+            # if we want to test with 0s instead of nans
+            # c_ref = np.nan_to_num(c_ref, 0)
+            # p_ref = np.nan_to_num(p_ref, 0)
+            # c_query = np.nan_to_num(c_query, 0)
+            # p_query= np.nan_to_num(p_query, 0)
+        
                '''
-        # if we want to test with 0s instead of nans
-        # c_ref = np.nan_to_num(c_ref, 0)
-        # p_ref = np.nan_to_num(p_ref, 0)
-        # c_query = np.nan_to_num(c_query, 0)
-        # p_query= np.nan_to_num(p_query, 0)
         
+        # we need to make sure c_ref and c_query are of the same size, do embedding otherwise  
         
-        # if len(self.remove_nans_from_numpy(p_ref))>1 and len(self.remove_nans_from_numpy(p_query))>1:
-        #     print('yes')
+        # rgb_out = rgb_in.copy()
+        # rgb_out.fill(np.nan)
+        
+        ''' IMPORTANT
+        We may not need nans or 0 padded AT ALLL
+        
+        '''        
+        c_ref = self.remove_nans_from_numpy(c_ref)
+        c_query = self.remove_nans_from_numpy(c_query)
         dist_clr = euclidean_distance(c_ref, c_query)
-        dist_clr = self.remove_nans_from_numpy(dist_clr)
+                
+        p_query = p_query[~np.isnan(p_query)]
+        p_ref = p_ref[~np.isnan(p_ref)]
+                
+        prob_mult  = (p_ref.reshape(-1,1) * p_query) 
+        prob_mult = self.remove_nans_from_numpy(prob_mult) 
         
+        return np.mean(dist_clr*prob_mult) # this is problematic, if the idstance of probability is zero, and the color is wrong, it will give 0 ...meaning perfecct color match, which is wrong
+                
+    def find_e_distance(self, c_ref, p_ref, c_query, p_query, n_val=0 ):
+        ''' $$e_{ij}(\text{s(group)}, \text{ground_truth}) = \frac{|p_i*P_j| |a_i - A_j|}{(p_i+P_j)^n}
+            
+            e_{ij}(\text{s(group)}, \text{ground_truth}) = \frac{|p_i*P_j| |a_i - A_j|}{(p_i+P_j)^n}
+            $$            
+            # if we want to test with 0s instead of nans
+            # c_ref = np.nan_to_num(c_ref, 0)
+            # p_ref = np.nan_to_num(p_ref, 0)
+            # c_query = np.nan_to_num(c_query, 0)
+            # p_query= np.nan_to_num(p_query, 0)
+        
+               '''
+        
+        # we need to make sure c_ref and c_query are of the same size, do embedding otherwise  
+        
+        # rgb_out = rgb_in.copy()
+        # rgb_out.fill(np.nan)
+        
+        ''' IMPORTANT
+        We may not need nans or 0 padded AT ALLL
+        
+        '''        
+        dist_clr = euclidean_distance(c_ref, c_query)
+        dist_clr = self.remove_nans_from_numpy(dist_clr)        
         
         prob_mult  = (p_ref.reshape(-1,1) * p_query) 
-        prob_mult = self.remove_nans_from_numpy(prob_mult)        
+        prob_mult = self.remove_nans_from_numpy(prob_mult) 
+
+        
         return np.mean(dist_clr*prob_mult) # this is problematic, if the idstance of probability is zero, and the color is wrong, it will give 0 ...meaning perfecct color match, which is wrong
-        # dist_prob = euclidean_distance(p_ref.reshape(-1,1), p_query.reshape(-1,1)) # resahpe needed as cdist only accepts 2D tensors
-        # dist_prob = self.remove_nans_from_numpy(dist_prob)                    
-        # prob_sum  = (p_ref.reshape(-1,1) + p_query)**n_val          
-        # prob_sum = self.remove_nans_from_numpy(prob_sum)
-        
-        # return np.mean(dist_clr*dist_prob/(prob_sum + 1e-20))  # 
-        # return np.sum(dist_clr*dist_prob/(prob_sum )) # this is problematic, if the idstance of probability is zero, and the color is wrong, it will give 0 ...meaning perfecct color match, which is wrong
-        # return np.mean(dist_clr*(dist_prob + prob_sum)) # this is problematic, if the idstance of probability is zero, and the color is wrong, it will give 0 ...meaning perfecct color match, which is wrong
-        
+
+
         
     def generage_item_pairs(self, items_to_match, wardrobe_obj):
         ''' Returns all the items as pairs, or triplets, depending on the number of items in
@@ -222,52 +258,67 @@ class ColorMatching():
             
         return True
     
-    def complement_color(self, rgb_vec, n_split):
-        rgb_result = rgb_vec.copy()
-        rgb_result.fill(np.nan)
-        for i, rgb_val in enumerate(rgb_vec):
-            if np.isnan(rgb[0]).any():
+    
+    
+    
+    def get_color_pack(self, rgb_in, p_in, n_split, mode = 'complement'):
+
+        '''     now, it is possible that c_1_orig has more than one RGB value 
+                we need to deal with it. Two approaches:
+                    1- use n_split>0 for each RGB, and consider each RGB separately
+                    2- use low n_split (0,1) and merge both RGBs into one structure            
+        '''
+        
+        for i, rgb_val in enumerate(rgb_in):
+            if np.isnan(rgb_val).any():
                 break
-            color_pack = generate_pack_of_colors(rgb_val, n_split= n_split, mode = 'colorful' )
+            color_pack = generate_pack_of_colors(rgb_val, n_split= n_split, p0=p_in[i], mode = mode )   # ''' - normal uses only complement and analogous - colorful uses oppsite and shade  '''
+             
         return color_pack
     
     
         
     def user_wardrobe_vs_itself_matches(self, wardrobe_obj, items_to_match = ['jacket', 'pants', 'shirt' ], 
                   n_val=0.5, num_best_maches = 10, n_split=1):
-        dist_metric = []
-        self.wardrobe_sanity_check(wardrobe_obj, items_to_match) 
+        dist_metric = []; catalogue_name = []
+        self.wardrobe_sanity_check(wardrobe_obj, items_to_match)        
         
-        # if not self.all_query_items_exist(items_to_match, wardrobe_items): continue $ this is part of the sanity check now
-        for item_1 in items_to_match: 
-            items_to_match_copy = items_to_match.copy()   
-            items_to_match_copy.remove(item_1) # we are comparing each piece in item with the rest of items in items_to_match            
-            
-            for img_1 in wardrobe_obj.data_dict['colr_df'][item_1].index:
-                # generate the colros of eqch query_image_name, then, find the distance with each single item
-                p_1 = wardrobe_obj.data_dict['pix_cnt_df'][item_1].loc[img_1].values # for the wardrobe, the image_name is used instead of the item in the pandas table
-                c_1_orig = self.to_2D_mat(wardrobe_obj, item_1, img_1, 'colr_df')
-                # now, we have to change the color of c_query
-                c_1_color_pack = self.complement_color(c_1_orig, n_split)
-                
-                ''' now, it is possible that c_1_orig has more than one RGB value 
-                we need to deal with it  '''
-                
-                for c_1_instance in c_1_color_pack:
-                    for item_2 in items_to_match_copy: # this mainly has one item, but did a for-loop for generality
-                        dist_item = 0
-                        for img_2 in wardrobe_obj.data_dict['colr_df'][item_2].index:
-                            p_2 = wardrobe_obj.data_dict['pix_cnt_df'][item_2].loc[img_2].values # for the wardrobe, the image_name is used instead of the item in the pandas table
-                            c_2 = self.to_2D_mat(wardrobe_obj, item_2, img_2, 'colr_df')
-                            dist_item += self.find_e_distance(c_1, p_1, c_2, p_2)  # not sure if it's the other way around, c2 then c1                       
-                                               
-                    
-            
-            
-        
-            
-        
-        
+        for item_ref in items_to_match: # this mainly has one item, but did a for-loop for generality                
+            for ref_img_name in wardrobe_obj.data_dict['colr_df'][item_ref].index:
+                p_ref = wardrobe_obj.data_dict['pix_cnt_df'][item_ref].loc[ref_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
+                c_ref = self.to_2D_mat(wardrobe_obj, item_ref, ref_img_name, 'colr_df')       
+                items_to_match_minus_ref = items_to_match.copy()   
+                items_to_match_minus_ref.remove(item_ref) # we are comparing each piece in item with the rest of items in items_to_match            
+                # generate the colors of every query_image_name, then, find the distance with each single item
+                for item_query in items_to_match_minus_ref:                     
+                    for query_img_name in wardrobe_obj.data_dict['colr_df'][item_query].index:                        
+                        p_query_orig = wardrobe_obj.data_dict['pix_cnt_df'][item_query].loc[query_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
+                        c_query_orig = self.to_2D_mat(wardrobe_obj, item_query, query_img_name, 'colr_df')
+                        # now, we have to change the color of c_query (or c1)
+                        query_color_pack = self.get_color_pack(c_query_orig, 
+                                                               p_query_orig, n_split, mode = 'complement') # we have to take the effect of the original probability and multiply it by the new one from the split, necessary when c_query_orig has more than one RGB with different probabilities
+                                                
+                        for c_query_key in query_color_pack:                             
+                            ''' we need a distance for each pack, one for complement, one for analogous, etc... 
+                            so, no need for the for-loop here '''
+                            if c_query_key == 'num_split': continue # this is not key, but split num / information                            
+                            c_query_instance = query_color_pack[c_query_key]['color']                            
+                            p_query_instance = query_color_pack[c_query_key]['prob'] # this is the resutlant split probabilit multiplied by the prior p0=p_query_orig, that is, low values p_query_orig should penalize the new colors                                    
+                            dist_item = self.find_e_distance(c_query_instance, 
+                                                              p_query_instance, 
+                                                              c_ref, p_ref)  
+                            dist_metric.append(dist_item) # much easier to store the distance separately, as we need it to find the min values to obtain the best matches
+                            catalogue_name.append({'query': items_to_match, 
+                                                   'reference': 'Self Wardrobe', 
+                                                   'matched_items': (query_img_name, ref_img_name),
+                                                   'color-match': c_query_key
+                                                   }) # registering the catalogue that possibly matches the query
+                                                     
+                        
+        result = self.sort_and_store_record(dist_metric, catalogue_name, num_best_maches)
+        result['info'].append(wardrobe_obj.data_dict['obj_name'])        
+        return result
+
         
     
     def ref_v_ref_matches(self, ref_obj, query_obj, items_to_match = ['jacket', 'pants', 'shirt' ], 
@@ -313,8 +364,8 @@ class ColorMatching():
                 dist_metric.append(dist_item) # much easier to store the distance separately, as we need it to find the min values to obtain the best matches
                 catalogue_name.append({'query':query_img_name, 'reference': ref_img_name, 'matched_items': items_to_match}) # registering the catalogue that possibly matches the query
         
-        result = self.sort_and_store_record(dist_metric,catalogue_name, num_best_maches)
-        result['info'].append(ref_obj.data_dict['obj_name'])        
+        result = self.sort_and_store_record(dist_metric, catalogue_name, num_best_maches)
+        result['info'].append(ref_obj.data_dict['obj_name'])
         return result
 
 
@@ -332,15 +383,24 @@ user_obj.load( wardrobe_user_name +'.pkl')
 items_to_match = ['jacket', 'pants']
 # result = x.ref_v_ref_matches(ref_obj, user_obj, items_to_match, n_val=0.5, num_best_maches = 4)
 # result = x.user_wardrobe_v_ref_matches(ref_obj, user_obj, 
-#                                        items_to_match, n_val=0.5, 
-#                                        num_best_maches = 10)
+#                                         items_to_match, n_val=0.5, 
+#                                         num_best_maches = 10)
 
 result = x.user_wardrobe_vs_itself_matches(user_obj, 
-                                       items_to_match, 
-                                       n_val=0.5, 
-                                       num_best_maches = 10)
+                                        items_to_match, 
+                                        n_val=0.5, 
+                                        num_best_maches = 10, 
+                                        n_split = 0)
 
 
         
-     
-        
+
+#  ------ Old  --- -- - - --
+# dist_prob = euclidean_distance(p_ref.reshape(-1,1), p_query.reshape(-1,1)) # resahpe needed as cdist only accepts 2D tensors
+# dist_prob = self.remove_nans_from_numpy(dist_prob)                    
+# prob_sum  = (p_ref.reshape(-1,1) + p_query)**n_val          
+# prob_sum = self.remove_nans_from_numpy(prob_sum)
+
+# return np.mean(dist_clr*dist_prob/(prob_sum + 1e-20))  # 
+# return np.sum(dist_clr*dist_prob/(prob_sum )) # this is problematic, if the idstance of probability is zero, and the color is wrong, it will give 0 ...meaning perfecct color match, which is wrong
+# return np.mean(dist_clr*(dist_prob + prob_sum)) # this is problematic, if the idstance of probability is zero, and the color is wrong, it will give 0 ...meaning perfecct color match, which is wrong

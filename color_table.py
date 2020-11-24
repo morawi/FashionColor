@@ -119,14 +119,18 @@ class ColorTable():
         return pix_cnt_df, colr_df
 
         
-    def build_table(self): 
-        ''' This function builds a table so that colors are stored in a DataFraem, 
-            Done for each clothing item ''' 
-    
+    def build_table(self, table_type='Catalogue'): 
+        ''' This function builds a table so that colors are organized in a DataFraem, 
+            Done for each clothing item 
+            
+            input:
+                  table_type = {'Catalogue', 'Wardrobe'} 
+            ''' 
+         
         if self.df.empty:        
             print('Error: There are no data to fill the table. Use append() to add data.')                   
-            return 0
-         
+            return 0        
+        
         pix_cnt_df={}; colr_df ={}        
         for i in range(len(self.df)): # key here is fashion item, e.g. skirt, dress, etc                 
             idx = self.df.loc[i].notna() # indices for all clients that are not None
@@ -141,9 +145,13 @@ class ColorTable():
         self.data_dict['pix_cnt_df'] = pix_cnt_df
         self.data_dict['colr_df'] = colr_df
         self.data_dict['obj_name'] = self.obj_name
+        
                        
         print('Calling build_table(). Warning: This will build the table based on each item.\nThe original DataFrame containing the information will be cleared to save memory.')
         self.df = self.df[0:0] # Now, let's free the memory used by df
+        
+        if table_type=='Wardrobe':
+            self.restructure_wardrobe_obj() # correcting the structure of the object, nothing is needed if it is a cagalogue derived from persons outfits
         gc.collect() # garbage collection after deletion
         
     
@@ -222,8 +230,54 @@ class ColorTable():
         
         '''
                
+    def get_wardrobe_labels(self, query_images):
+        ''' returns a list containing the labels, accepts all the query images
+        as inpyt, which are usually the label and a postfix of a sequential number
+        skirt_1.png, skirt_2.png, ..., shirt_1.png, shirt_2.png, ..., etc'''
+        user_wardrobe_labels = set()            
+        for query_img_name in query_images:
+            label = query_img_name[:query_img_name.find('_')]
+            user_wardrobe_labels.update([label])
+        
+        return list(user_wardrobe_labels)
+    
+    
+    
+        
+    def restructure_wardrobe(self, in_dict, in_img_names): # in_dict = query_obj.data_dict['pix_cnt_df']
+        ''' Restructures a wardrobe that is formed as a dicionary of images, and each image is 
+        assocaited to a pandas data frame of some label (as one row).
+        The output is a dictionary of the label storing all items of the same labels
+        in a pandas table such that each row denotes one image '''
+        
+        labels = self.get_wardrobe_labels(in_img_names)
+        
+        df_empty = in_dict[in_img_names[0]].copy() 
+        df_empty = df_empty.drop(df_empty.index) # empty dataframe, to be used to accumulate same label items
+        
+        out_dict = {}
+        for label in labels:            
+            df_0 = df_empty.copy()
+            for in_img_name in in_img_names:
+                stored_label = in_dict[in_img_name].index.item()
             
-            
+                if label==stored_label:
+                    data_frame = in_dict[in_img_name].copy() # we need a copy of the df
+                    data_frame.index = [in_img_name] # changing the index to the image name
+                    df_0 = df_0.append(data_frame)
+                               
+            out_dict[label] = df_0                       
+                    
+        return out_dict
+    
+    def restructure_wardrobe_obj(self):
+        ''' This is the main function that calls restructure_wardrobe fro each dictionary of the in_object '''
+        in_images = list(self.data_dict['colr_df'].keys())
+        self.data_dict['pix_cnt_df'] = self.restructure_wardrobe(self.data_dict['pix_cnt_df'], in_images)
+        self.data_dict['colr_df'] = self.restructure_wardrobe(self.data_dict['colr_df'], in_images)
+        
+        
+     
 
 # x = ColorTable()
 # x.append(); x.append(); x.append()
@@ -232,123 +286,4 @@ class ColorTable():
 
 # df = df.replace(r'^\s*$', np.nan, regex=True) # replacing None with Nan, if needed
 # df = pd.DataFrame(students, columns = ['Jacket' , 'Pants', 'Blouse' , 'Dress'] ) # ,  index=['a', 'b'])
-
-   
-    
-    # def get_cnt_color_as_df_old2(self, item, item_name):        
-    #     colr_names = ['color_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the colors of one item (e.g. skirt) for all clients
-    #     pix_cnt_names = ['pxl_prob_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the pixel counts for one item(e.g. skirt) for all clients                    
-    #     colr_df = pd.DataFrame([(None,)*len(colr_names)], columns = colr_names,  index=[]) # Constructing the dataframe
-    #     pix_cnt_df = pd.DataFrame([(None,)*len(pix_cnt_names)], columns = pix_cnt_names,  index=[]) # Constructing the dataframe
-        
-    #     colr_df.index = colr_df.index.map(str) # making the index as a tring
-    #     pix_cnt_df.index = pix_cnt_df.index.map(str) # making the index as a tring
-               
-    #     #for jj, one_column_item in enumerate(all_row_items): # '''idx has all clie key, key could be skirt, belt, dress, etc '''                        
-    #     pix_cnt_color = dict(item) #  ''' each per_col_item has max_mumber_of_colrs  defined as pixel_count, followed by the color value '''
-    #     pix_cnt = [*pix_cnt_color] # pix_cnt_color.keys() # these are pixel counts
-    #     colors = [*pix_cnt_color.values()] # these are the colors corresponding to each pixel count
-        
-    #     ff=float('nan')        
-    #     # pix_cnt = pix_cnt + [None] * (self.max_mumber_of_colors - len(pix_cnt)) # filling missing values wiht None if any
-    #     pix_cnt = pix_cnt + [ff] * (self.max_mumber_of_colors - len(pix_cnt)) # filling missing values wiht None if any
-    #     pix_cnt_df.loc[len(pix_cnt_df)] = pix_cnt
-        
-    #     z = np.array([ff,ff,ff])
-    #     # colors = colors + [None] * (self.max_mumber_of_colors - len(colors)) # filling missing values wiht None if any
-    #     colors = colors + [z] * (self.max_mumber_of_colors - len(colors)) # filling missing values wiht None if any
-    #     colr_df.loc[len(colr_df)] = colors
-    
-    #     colr_df.index    = [item_name]
-    #     pix_cnt_df.index = [item_name]
-    #     ''' - To access one row, we use: colr_df.loc['0272.jpg'], where '0272.jpg' is the image name index
-    #         - To acess one point at a specific row and column we can use, colr_df['colr_0']['0272.jpg']  '''
-            
-    #     return pix_cnt_df, colr_df
-
-    
-    
-    # def build_table_old2(self): 
-    #     ''' This function builds a table so that colors are stored in a DataFraem, 
-    #         Done for each clothing item ''' 
-    
-    #     if self.df.empty:        
-    #         print('Error: There are no data to fill the table. Use append() \
-    #                to add data.')                   
-    #         return 0
-         
-    #     pix_cnt_df={}; colr_df ={}        
-    #     for i in range(len(self.df)): # key here is fashion item, e.g. skirt, dress, etc                 
-    #         idx = self.df.loc[i].notna() # indices for all clients that are not None
-    #         idx_of_items = idx[2:] # starging from 2 to ignore image_name and background
-    #         if not(idx.any()): continue            
-    #         im_name = self.df.loc[i]['im_name']   
-    #         for item_name in idx_of_items.keys(): 
-    #             item = self.df.loc[i][item_name]                
-    #             if not isinstance(item, list): continue # if not a list, it is  if  pd.isnull(item): continue
-    #             pix_cnt_df[im_name], colr_df[im_name] = self.get_cnt_color_as_df(item, item_name)      
-            
-    #         ''' pix_cnt, colr, and img_names have one to one correspondence '''
-    #     self.data_dict['pix_cnt_df'] = pix_cnt_df
-    #     self.data_dict['colr_df'] = colr_df
-    #     self.data_dict['obj_name'] = self.obj_name
-                       
-    #     print('Calling build_table(). Warning: This will build the table based on each item.\nThe original DataFrame containing the information will be cleared to save memory.')
-    #     self.df = self.df[0:0] # Now, let's free the memory used by df
-    #     gc.collect() # garbage collection after deletion
-    
-    
-    
-    # def get_cnt_color_as_df_old(self, all_rows_items, img_names):
-    #     colr_names = ['color_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the colors of one item (e.g. skirt) for all clients
-    #     pix_cnt_names = ['pxl_prob_'+ str(i)  for i in range(self.max_mumber_of_colors)] # stores the pixel counts for one item(e.g. skirt) for all clients                    
-    #     colr_df = pd.DataFrame([(None,)*len(colr_names)], columns = colr_names,  index=[]) # Constructing the dataframe
-    #     pix_cnt_df = pd.DataFrame([(None,)*len(pix_cnt_names)], columns = pix_cnt_names,  index=[]) # Constructing the dataframe
-        
-    #     colr_df.index = colr_df.index.map(str)
-    #     pix_cnt_df.index = pix_cnt_df.index.map(str)
-
-    #     for jj, one_column_item in enumerate(all_rows_items): # '''idx has all clie key, key could be skirt, belt, dress, etc '''                        
-    #         pix_cnt_color = dict(one_column_item) #  ''' each per_col_item has max_mumber_of_colrs  defined as pixel_count, followed by the color value '''
-    #         pix_cnt = [*pix_cnt_color] # pix_cnt_color.keys() # these are pixel counts
-    #         colors = [*pix_cnt_color.values()] # these are the colors corresponding to each pixel count
-            
-    #         pix_cnt = pix_cnt + [None] * (self.max_mumber_of_colors - len(pix_cnt)) # filling missing values wiht None if any
-    #         pix_cnt_df.loc[len(pix_cnt_df)] = pix_cnt
-            
-    #         colors = colors + [None] * (self.max_mumber_of_colors - len(colors)) # filling missing values wiht None if any
-    #         colr_df.loc[len(colr_df)] = colors
-    #     colr_df.index = img_names
-    #     pix_cnt_df.index = img_names
-    #     ''' - To access one row, we use: colr_df.loc['0272.jpg'], where '0272.jpg' is the image name index
-    #         - To acess one point at a specific row and column we can use, colr_df['colr_0']['0272.jpg']  '''
-            
-    #     return pix_cnt_df, colr_df
-
-
-#   def build_table_old(self): 
-    #     ''' This function builds a table so that colors are stored in a DataFraem, 
-    #         done for each clothing item ''' 
-    
-    #     if self.df.empty:        
-    #         print('Error: There are no data to fill the table. Use append() \
-    #                to add data.')                   
-    #         return 0
-         
-    #     pix_cnt_df={}; colr_df ={}        
-    #     for i, key in enumerate(self.df): # key here is fashion item, e.g. skirt, dress, etc                 
-    #         idx = self.df[key].notna() # indices for all clients that are not None
-    #         if key == 'im_name' or key == 'background' or not(idx.any()): continue                                    
-    #         pix_cnt_df[key], colr_df[key] = self.get_cnt_color_as_df(self.df[key][idx], 
-    #                                                                  self.df['im_name'][idx])
-            
-    #         ''' pix_cnt, colr, and img_names have one to one correspondence '''
-    #     self.data_dict['pix_cnt_df'] = pix_cnt_df
-    #     self.data_dict['colr_df'] = colr_df
-    #     self.data_dict['obj_name'] = self.obj_name
-                       
-    #     print('Calling build_table(). Warning: This will build the table based on each item.\nThe original DataFrame containing the information will be cleared to save memory.')
-    #     self.df = self.df[0:0] # Now, let's free the memory used by df
-    #     gc.collect() # garbage collection after deletion    
-                    
 

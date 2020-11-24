@@ -6,11 +6,14 @@ Created on Tue Nov 10 14:53:57 2020
 """
 
 
-# Complementary Colours Algorithm - www.101computing.net/complementary-colours-algorithm
+
 # on color Complementary vs color opposite https://www.quora.com/What-is-the-complementary-colour-of-black
+# analogous https://www.tigercolor.com/color-lab/color-theory/color-harmonies.htm
 # color opposite, althoiug callled complementary https://www.101computing.net/complementary-colours-algorithm/
 # color complement code   https://stackoverflow.com/questions/40233986/python-is-there-a-function-or-formula-to-find-the-complementary-colour-of-a-rgb
 # there is a nice hue wheel that shows how much color changes with the angle
+# split complementary https://colorswatches.info/split-complementary-colors
+# https://www.pinterest.co.uk/pin/390546598913400705/
 
 #Complete the code here...
 from colorsys import rgb_to_hsv, hsv_to_rgb
@@ -18,10 +21,11 @@ import numpy as np
 from color_utils import RGB2HEX
 from color_names import ColorNames
 import matplotlib.pyplot as plt
+import sys
 
-def color_pie_chart(design_pattern, figure_size=(9, 6), fname=None):  
-        color_names_obj = ColorNames()    
+def color_pie_chart(design_pattern, figure_size=(9, 6), fname=None):          
         pixel_counts, hex_colors = zip(*[( design_pattern['prob'][i], RGB2HEX(design_pattern['color'][i])) for i in range(len(design_pattern['prob'])) ])      
+        # color_names_obj = ColorNames()    
         # names_of_colors = [color_names_obj.get_color_name(item) for item in  hex_colors]            
         pixel_counts_labels =[ str(int(np.round(100*item, 2)))+'%' for item in pixel_counts]   # color names from color_names class can be added here
         # print(names_of_colors)
@@ -48,7 +52,7 @@ def apply_opposite(design_pattern_copy):
         col_opposite = [255-rgb[0], 255-rgb[1], 255-rgb[2]]
         col_.append(col_opposite)        
     design_pattern['color'] = col_
-    design_pattern['design_name']  = design_pattern['design_name']  + '-opposite'
+    design_pattern['design_name']  = [design_pattern['design_name'][0] + '-opposite']
     design_pattern['color_names'] = list_of_rgb_to_names(col_)
     return design_pattern
     
@@ -74,7 +78,7 @@ def apply_shade(design_pattern_copy, shade_val): # shade_val between 0 and 255
         col_shade = color_shade(rgb, shade=shade_val)
         col_.append(col_shade)        
     design_pattern['color'] = col_
-    design_pattern['design_name']  = design_pattern['design_name']  + '-shade'
+    design_pattern['design_name']  = [design_pattern['design_name'][0]  + '-shade']
     design_pattern['color_names'] = list_of_rgb_to_names(col_)
     return design_pattern
     
@@ -83,45 +87,55 @@ def list_of_rgb_to_names(col_):
     color_names_obj = ColorNames()     
     hex_colors = [ RGB2HEX(col_val) for col_val in col_ ]
     names_of_colors = [color_names_obj.get_color_name(item) for item in  hex_colors]  
-    return names_of_colors, hex_colors
+    return names_of_colors # , hex_colors
 
 def generate_the_colors(rgb, theta, prob, design_name):
     col_=[]; 
     design_pattern = {}    
     for th in theta:
         col_.append(color_complementary(rgb, th) )
-    design_pattern['color'] = col_
-    design_pattern['prob']  = prob
-    design_pattern['design_name'] = design_name     
+    design_pattern['color'] = col_ #  np.array(col_, dtype =float) 
+    design_pattern['prob']  = prob # np.array(prob)
+    design_pattern['design_name'] = [design_name]
     design_pattern['color_names'] = list_of_rgb_to_names(col_)
     return design_pattern
 
 
-def get_n_split_complementary(rgb, perc_upper, n_step, p_major = 0.4, analogous=False, 
-                              remove_original_color = True):
+def get_n_split_complementary(rgb, perc_upper, n_step, p_major = 0.4, 
+                              remove_original_color = False, 
+                              p0=1, 
+                              match_mode= 'complement'):
     
-    design_name='analogous' if analogous else 'complement'
+    perc_upper = (9+n_step)/100 # the hue degree to depend on the number of splits, to allow stretching the colros if num of splits is high
     
     if n_step ==0: # this only returns the color complement 
-        return generate_the_colors(rgb, theta=[0.5], prob=[0.5], design_name= design_name)
-    theta = find_split_values(xx=perc_upper, split_step = n_step)
-    if remove_original_color: theta.remove(0)      
-    
-    if not analogous:        
+        if match_mode =='complement':
+            return generate_the_colors(rgb, theta=[0.5], prob=[p0], design_name= 'complement')
+        else:
+            n_step +=1
+           
+    theta = find_split_points(xx=perc_upper, split_step = n_step)    
+    if remove_original_color: theta.remove(0)   
+        
+    idx =match_mode.find('_') 
+    match_mode_class = match_mode[:idx] if idx>0 else match_mode  # idx = -1 if '_' does not exist
+    if match_mode_class =='complement':                
         num_thetas = len(theta) # has to be without the complement angle        
-        theta =[0.5]+theta # adding the complement angle            
+        theta = [thx+0.5 for thx in theta] # converting to complement
+        if not remove_original_color: theta.append(0)
+        else: theta =[0.5]+theta # adding the complement angle                    
         p_minor = (1-p_major)/num_thetas
         prob=[p_major]+ [p_minor]*num_thetas
-    else:
-        num_thetas = len(theta) # has to be without the complement angle        
-        p_minor = (1-p_major)/num_thetas
-        prob=[p_minor]*num_thetas      
-    
-    return generate_the_colors(rgb, theta, prob, design_name)
+    elif match_mode_class =='analogous': 
+        num_thetas = len(theta) # has to be without the complement angle                
+        prob=[p0/num_thetas]*num_thetas
+        
+    prob = [p0*p for p in prob] # prob will no sum up to 1 in this case, as it depends on the priori p0
+    return generate_the_colors(rgb, theta, prob, match_mode_class)
 
 
     
-def find_split_values(xx=.15, split_step = 2):    
+def find_split_points(xx=.15, split_step = 2):    
     xx = int(xx*100)
     xx = int(xx/split_step)*split_step # correcting nn so that it accepts division by split_step
     zz= np.array(range(-xx, 0, int (xx/split_step)) )/ 100
@@ -129,11 +143,14 @@ def find_split_values(xx=.15, split_step = 2):
     return list(zz)+list([0])+list(z2)
         
 
-def generate_pack_of_colors(rgb_val, n_split, mode = 'normal'):
+def generate_pack_of_colors(rgb_val, n_split, p0=1, match_mode = 'complement'):
     ''' 
-    input- 
-        - normal uses only complement and analogous
-        - colorful uses oppsite and shade 
+    input - 
+    match_mode
+        - complement, complemen_opposite, complement_shade
+        - analogous, analogous_opposite, analogous_shade, 
+    rgb_val: 
+        a single RGB value example (255, 121, 11)
     output 
         - resutl: dictionary of each color set
     
@@ -141,31 +158,34 @@ def generate_pack_of_colors(rgb_val, n_split, mode = 'normal'):
     # fname= str(rgb_val)+ '-'+ str(n_split)+'-split' 
     
     color_pack = {}
-    design_pattern_comp = get_n_split_complementary(rgb_val, 
-                                          p_major = 1/ (2*n_split+1), # this value only when analogous_bool=False
-                                          perc_upper=0.1, 
-                                          n_step=n_split, 
-                                          analogous=False) #; print(n_split, 'Analogous')# ; color_pie_chart(design_pattern, fname=fname)
-           
-    design_pattern_analogous= get_n_split_complementary(rgb_val, 
+    
+    design_pattern_comp= get_n_split_complementary(rgb_val, 
                                               p_major = 1/ (2*n_split+1), # this value only when analogous_bool=False
                                               perc_upper=0.1, 
                                               n_step=n_split, 
-                                              analogous=True); # print(n_split, 'Complement') ## color_pie_chart(design_pattern, fname=fname)
-    if mode == 'normal':        
-        color_pack['complement'] = design_pattern_comp
-        color_pack['analogous'] = design_pattern_analogous
-        
-    elif mode == 'colorful':                   
-        design_pattern_analogous_opp = apply_opposite(design_pattern_analogous) # print(n_split, 'alalogous-opposite') ; color_pie_chart(design_pattern_opp, fname='oppos_'+fname)
-        design_pattern_analogous_shade = apply_shade(design_pattern_analogous, shade_val=128) #;print(n_split, 'opposite shade') ; # color_pie_chart(design_pattern_shade, fname='shade_'+fname)
-        design_pattern_complement_opp = apply_opposite(design_pattern_comp) # print(n_split, 'alalogous-opposite') ; color_pie_chart(design_pattern_opp, fname='oppos_'+fname)
-        design_pattern_complement_shade = apply_shade(design_pattern_comp, shade_val=128) #;print(n_split, 'opposite shade') ; # color_pie_chart(design_pattern_shade, fname='shade_'+fname)
-        
-        color_pack['analogous_opposite']  = design_pattern_analogous_opp
-        color_pack['analogous_shade']     = design_pattern_analogous_shade
-        color_pack['complement_opposite'] = design_pattern_complement_opp
-        color_pack['complement_shade']    = design_pattern_complement_shade
+                                              match_mode= match_mode, p0=p0); # print(n_split, 'Complement') ## color_pie_chart(design_pattern, fname=fname)
+           
+    design_pattern_analog = get_n_split_complementary(rgb_val, 
+                                              p_major = 1/ (2*n_split+1), # this value only when analogous_bool=False
+                                              perc_upper=0.1, 
+                                              n_step=n_split, 
+                                              match_mode= 'analogous', p0=p0); # print(n_split, 'Complement') ## color_pie_chart(design_pattern, fname=fname)
+
+    
+    if match_mode == 'complement':
+        color_pack['complement'] = design_pattern_comp       
+    if match_mode == 'complement_opposite':
+        color_pack['complement_opposite'] = apply_opposite(design_pattern_comp) # print(n_split, 'alalogous-opposite') ; color_pie_chart(design_pattern_opp, fname='oppos_'+fname)       
+    elif match_mode == 'complement_shade':  
+        color_pack['analogous_shade'] = apply_shade(design_pattern_comp, shade_val=128) #;print(n_split, 'opposite shade') ; # color_pie_chart(design_pattern_shade, fname='shade_'+fname)   
+    elif match_mode == 'analogous':                
+        color_pack['analogous'] =  design_pattern_analog
+    elif match_mode == 'analogous_opposite':         
+        color_pack['analogous_opposite'] = apply_opposite(design_pattern_analog) # print(n_split, 'alalogous-opposite') ; color_pie_chart(design_pattern_opp, fname='oppos_'+fname)
+    elif match_mode == 'analogous_shade':  
+        color_pack['analogous_shade'] = apply_shade(design_pattern_analog, shade_val=128) #;print(n_split, 'opposite shade') ; # color_pie_chart(design_pattern_shade, fname='shade_'+fname)
+                
+    # color_pack['num_split'] = [n_split]
         
     return color_pack
         

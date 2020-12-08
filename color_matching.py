@@ -13,18 +13,28 @@ from distance_troch import euclidean_distance # , cosine_similarity_n_space
 import itertools
 from generate_colors import generate_pack_of_colors
 import copy
-
 from colorsys import rgb_to_hsv
+from ciecam02 import rgb2jch # , jch2rgb # https://pypi.org/project/ciecam02/
 
 class ColorMatching():
     ''' Arranges colors of fashion/clothing items into a pandas table. 
     Each outfit is stored into a single table. Tables of several outfits can be appended '''
-    def __init__(self):
+    def __init__(self, wardrobe_name=None, catalogue_name=None):
         
-        self.ref_data_dict = None                  
-   
+        self.wardrobe_obj=None
+        self.ref_obj=None 
+        if wardrobe_name != None:
+            print('loading', wardrobe_name, '...')
+            self.wardrobe_obj = ColorTable(fashion_obj_name = 'Wardrobe of '+ wardrobe_name) 
+            self.wardrobe_obj.load(wardrobe_name +'.pkl')
+        if catalogue_name != None:
+            print('loading', catalogue_name, '...')
+            self.ref_obj = ColorTable(fashion_obj_name = catalogue_name) 
+            self.ref_obj.load(catalogue_name +'.pkl')
+            
+            
 
-    def load(self, fname, path = 'C:/MyPrograms/FashionColor/ColorFiles/'):   
+    def load(self, fname, path = 'C:/MyPrograms/FashionColor/ColorModelFiles/'):   
         with open(path+fname, 'rb') as fp:
             self.ref_data_dict = pickle.load(fp)
    
@@ -67,7 +77,7 @@ class ColorMatching():
         result = {}     
         result['dist_metric'] = dist_metric
         result['catalogue_name'] = catalogue_name 
-        result['info'] = [] # to be appended with info
+        result['info'] = [] # to be appended with info, later!
                                 
         # sorting records according to distance                           
         idx_sorted_dist = np.argsort(result['dist_metric'])        
@@ -83,55 +93,56 @@ class ColorMatching():
        
         
     def rgb2hsv(self, rgb_val):
-        lambda_val = 2 # to give more weight on the hue in the distance 
+        lambda_val = 1 # to give more weight on the hue in the distance ... but this value should be estiamted emprically, I found that 1 is the best option
         
         hsv_out = []
-        for rgb in rgb_val:
-            # print(rgb)
-            hh = list(rgb_to_hsv(rgb[0],rgb[1], rgb[2]))            
-            hh[2] = (hh[2]/255)/lambda_val  # reducing the saturation, to give more weight to the hue
+        for rgb in rgb_val:            
+            hh = list(rgb_to_hsv(rgb[0],rgb[1], rgb[2]))                        
             hh[1] = hh[1]/lambda_val   # reducting the value            
+            hh[2] = (hh[2]/255)/lambda_val  # reducing the saturation, to give more weight to the hue                                    
             hsv_out.append(hh)               
-            # print('-----', '\n', hh, rgb_val)
+            # print('-----', '\n', hh, rgb_val)            
+            
+            
         return hsv_out
+        # use_hsP = True # http://alienryderflex.com/hsp.html  ...did not do a good job either
+            # if use_hsP:  hh[2]  =  np.sqrt( .299*rgb[0]**2  + .587* rgb[1]**2 + .114 *rgb[2]**2 )/255
         
                 
-    def find_e_distance(self, c_ref, p_ref, c_query, p_query):
-        ''' $$e_{ij}(\text{s(group)}, \text{ground_truth}) = \frac{|p_i*P_j| |a_i - A_j|}{(p_i+P_j)^n}
-            
-            e_{ij}(\text{s(group)}, \text{ground_truth}) = \frac{|p_i*P_j| |a_i - A_j|}{(p_i+P_j)^n}
-            $$            
+    def find_e_distance(self, c_ref, p_ref, c_query, p_query, use_hsv = True):
+        ''' 
             # if we want to test with 0s instead of nans
             # c_ref = np.nan_to_num(c_ref, 0)
                  
-        '''
-        
-        # we need to make sure c_ref and c_query are of the same size, do embedding otherwise  
-        
-        # rgb_out = rgb_in.copy()
-        # rgb_out.fill(np.nan)
-        
-        ''' IMPORTANT
-        We may not need nans or 0 padded AT ALLL
-        
-        '''
-        use_hsv = True
-        
+        '''      
+        alpha = 1
+        use_ciecam02 = False # not sure if this is doing a good job, hsv is better!
+                
         if use_hsv:            
             c_query = self.remove_2D_nans_from_numpy(c_query)                        
             c_ref = self.remove_2D_nans_from_numpy(c_ref)
-            c_query = self.rgb2hsv(c_query)
-            c_ref = self.rgb2hsv(c_ref)  
+            if use_ciecam02:
+                c_query = rgb2jch(c_query)
+                c_ref   = rgb2jch(np.array(c_ref))                 
+            else:                
+                c_query = self.rgb2hsv(c_query)
+                c_ref = self.rgb2hsv(c_ref)  
                     
         dist_clr = euclidean_distance(np.array(c_ref, dtype=float), np.array(c_query, dtype=float))
-        dist_clr = self.remove_nans_from_numpy(dist_clr)        
+        dist_clr = self.remove_nans_from_numpy(dist_clr) # nans have been removed inside euclidean_distance
+        if not use_hsv: dist_clr=dist_clr/255 # this is like having RGB values in [0, 1]
+                
+        prob_diff  = np.array(p_ref, dtype=float).reshape(-1,1) - np.array(p_query, dtype=float)
+        prob_diff = self.remove_nans_from_numpy(prob_diff) 
+                
+        posteriori_prob = dist_clr + alpha*abs(prob_diff)
+        # posteriori_prob = dist_clr * (1- prob_mult) # the lower the distance, and the higher the probability is better, thus we need to do 1-prob_mult
         
-        prob_mult  = (np.array(p_ref, dtype=float).reshape(-1,1) * np.array(p_query, dtype=float)) 
-        prob_mult = self.remove_nans_from_numpy(prob_mult) 
-
-        
-        return np.mean(dist_clr*prob_mult) # this is problematic, if the idstance of probability is zero, and the color is wrong, it will give 0 ...meaning perfecct color match, which is wrong
-
+        if np.min(posteriori_prob)==0: 
+            print('possible error as min of colros match is 0 ... ')
+            
+        return np.min(posteriori_prob) # if we are looking for the one best match
+        # return np.mean(posteriori_prob)
 
 
         
@@ -181,16 +192,17 @@ class ColorMatching():
         for j in sorted(dublicate_idx):
             result['catalogue_name'].pop(j-cnt)
             result['dist_metric'].pop(j-cnt)            
-            cnt +=1            
-            # print(j)
+            cnt +=1                        
         if cnt>0:
             print()
             result['info'].append('dublicate matches removed')
             
             
                     
-    def ref_v_ref_matches(self, ref_obj, query_obj, items_to_match = ['jacket', 'pants', 'shirt' ], 
+    def ref_v_ref_matches(self, items_to_match = ['jacket', 'pants', 'shirt' ], 
                num_best_maches = 10): 
+        
+        query_obj = self.wardrobe_obj
         '''  query_obj should contain clothing from whole person (outfit) and we find the best match 
         after comparing it to other outfits stored in ref_obj (which is something like the trend catalogue) 
         
@@ -199,9 +211,9 @@ class ColorMatching():
         - result: a dictionary that contains the matches and the distances '''        
         
         items_to_match = [items_to_match] if not isinstance(items_to_match, list) else items_to_match
-        print('matching according to', ref_obj.data_dict['obj_name'], 'catalogue' )              
+        print('matching according to', self.ref_obj.data_dict['obj_name'], 'catalogue' )              
         
-        ref_images = self.get_image_names(ref_obj)
+        ref_images = self.get_image_names(self.ref_obj)
         query_images = self.get_image_names(query_obj)
         
          
@@ -209,7 +221,7 @@ class ColorMatching():
         catalogue_name = []
         
         for ref_img_name in ref_images:
-            ref_items  = list(ref_obj.data_dict['pix_cnt_df'][ref_img_name].index)
+            ref_items  = list(self.ref_obj.data_dict['pix_cnt_df'][ref_img_name].index)
             if not self.all_query_items_exist(items_to_match, ref_items): continue
             for query_img_name in query_images:
                 query_items  = list(query_obj.data_dict['pix_cnt_df'][query_img_name].index)
@@ -217,8 +229,8 @@ class ColorMatching():
                 
                 dist_item = 0
                 for item in items_to_match:                 
-                    p_ref = ref_obj.data_dict['pix_cnt_df'][ref_img_name].loc[item].values            
-                    c_ref = self.to_2D_mat(ref_obj, ref_img_name, item, 'colr_df')
+                    p_ref = self.ref_obj.data_dict['pix_cnt_df'][ref_img_name].loc[item].values            
+                    c_ref = self.to_2D_mat(self.ref_obj, ref_img_name, item, 'colr_df')
                     
                     p_query = query_obj.data_dict['pix_cnt_df'][query_img_name].loc[item].values            
                     c_query = self.to_2D_mat(query_obj, query_img_name, item, 'colr_df')
@@ -230,13 +242,13 @@ class ColorMatching():
                 catalogue_name.append({'query':query_img_name, 'reference': ref_img_name, 'matched_items': items_to_match}) # registering the catalogue that possibly matches the query
         
         result = self.sort_and_store_record(dist_metric, catalogue_name, num_best_maches)
-        result['info'].append(ref_obj.data_dict['obj_name'])
+        result['info'].append(self.ref_obj.data_dict['obj_name'])
         return result
 
         
     
-    def user_wardrobe_v_ref_matches(self, ref_obj, wardrobe_obj, items_to_match = ['jacket', 'pants', 'shirt' ], 
-                   num_best_maches = 10): 
+    def user_wardrobe_v_ref_matches(self, items_to_match = ['jacket', 'pants', 'shirt' ], 
+                   num_best_maches = 10, verbose= False): 
             '''  query_obj should contain clothing from  one person's wardrob and we find the best match after comparing it
             to the ref_obj (which is something like the trend catalogue) 
             
@@ -248,24 +260,26 @@ class ColorMatching():
             that is, eacah image has just one single item. These collections
             are stored in a folder named by the user_name            '''        
             
+            wardrobe_obj = self.wardrobe_obj
+            
             self.wardrobe_sanity_check(wardrobe_obj, items_to_match)
                                    
             dist_metric = [];  catalogue_name = []
-            print('matching according to', ref_obj.data_dict['obj_name'], 'catalogue' )                        
+            print('\n Matching', self.wardrobe_obj.obj_name, 'with', self.ref_obj.obj_name, 'catalogue' )
             item_pairs = self.generage_item_pairs(wardrobe_obj, items_to_match)              
                 
-            for ref_img_name in self.get_image_names(ref_obj):
-                ref_items  = list(ref_obj.data_dict['pix_cnt_df'][ref_img_name].index) # this does not work in debug mode, but ok in run mode
+            for ref_img_name in self.get_image_names(self.ref_obj):
+                ref_items  = list(self.ref_obj.data_dict['pix_cnt_df'][ref_img_name].index) # this does not work in debug mode, but ok in run mode
                 ''' we need to check of items_to_match in wardrobe_iems '''
                 if not self.all_query_items_exist(items_to_match, ref_items): continue
-                print('Image with', items_to_match, 'is:', ref_img_name)  
+                if verbose: print('Image with', items_to_match, 'is:', ref_img_name)  
                                            
                 for item_pair in item_pairs:
                     dist_item = 0
                     for query_img_name in item_pair:
                         item = query_img_name[:query_img_name.find('_')]                         
-                        p_ref = ref_obj.data_dict['pix_cnt_df'][ref_img_name].loc[item].values
-                        c_ref = self.to_2D_mat(ref_obj, ref_img_name, item, 'colr_df')
+                        p_ref = self.ref_obj.data_dict['pix_cnt_df'][ref_img_name].loc[item].values
+                        c_ref = self.to_2D_mat(self.ref_obj, ref_img_name, item, 'colr_df')
                         p_query = wardrobe_obj.data_dict['pix_cnt_df'][item].loc[query_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
                         c_query = self.to_2D_mat(wardrobe_obj, item, query_img_name, 'colr_df')
 
@@ -275,7 +289,7 @@ class ColorMatching():
                     catalogue_name.append({'matched_items': item_pair, 'query':items_to_match,  'reference': ref_img_name }) # registering the catalogue that possibly matches the query
                 
             result  = self.sort_and_store_record(dist_metric,catalogue_name, num_best_maches)
-            result['info'].append(ref_obj.data_dict['obj_name'])
+            result['info'].append(self.ref_obj.data_dict['obj_name'])
             
             
             return result
@@ -294,8 +308,8 @@ class ColorMatching():
             exit()            
         return True
     
-    def combine_packs(self, color_pack):  
-        '''' Restructuring the color_pack so that multi-color items are correctly organized '''
+    def restucture_pack(self, color_pack):  
+        ''' Restructuring the color_pack so that multi-color items are correctly organized '''
         output_pack = copy.deepcopy(color_pack)[0]
         
         for record in color_pack[1:]:            
@@ -308,64 +322,55 @@ class ColorMatching():
     
     
     
-    def get_color_pack(self, rgb_in, p_in, n_split, match_mode = 'complement'):
+    def get_color_pack(self, rgb_in, p_in, n_split, match_mode = 'complement', perc_upper=None):
 
-        '''     now, it is possible that c_1_orig has more than one RGB value 
-                we need to deal with it. Two approaches:
-                    1- use n_split>0 for each RGB, and consider each RGB separately
-                    2- use low n_split (0,1) and merge both RGBs into one structure            
+        '''     It is possible that c_1_orig has more than one RGB value 
+                we need to deal with it. Thus, we use a for-loop, and then we restructure
+                the records list
+                    
         '''
         color_pack = []
         for i, rgb_val in enumerate(rgb_in):
             if np.isnan(rgb_val).any(): break            
-            record = generate_pack_of_colors(rgb_val, n_split= n_split, p0=p_in[i], match_mode = match_mode )
+            record = generate_pack_of_colors(rgb_val, n_split= n_split, p0=p_in[i], 
+                                             match_mode = match_mode, perc_upper= perc_upper )
             color_pack.append( record )   
+            
+        return self.restucture_pack(color_pack) 
+    
         
-        return self.combine_packs(color_pack) 
-    
-    
-    
-    
-    def get_split_point(self, use_random_split, num_of_colors, n_split ):
-        ''' generate a new splitting point depeding on the number of colors,  '''
-        if use_random_split:                                
-            n_split = np.random.randint(0, num_of_colors)
-        return n_split
-        
-    
-    
-    # this is not in use now
-    def user_wardrobe_vs_itself_matches_multi(self, wardrobe_obj, items_to_match = ['jacket', 'pants', 'shirt' ], 
-                  num_best_maches = 10, n_split=1, match_mode = 'complement', use_random_split = False):
+    def user_wardrobe_vs_itself_matches_multi(self, items_to_match = ['jacket', 'pants', 'shirt' ], 
+                  num_best_maches = 10, n_split=1, match_mode = 'complement'):
         '''match_mode: complement, analogous, mix (has analogous, complement, opposite, and shade) 
         num_best_maches: the result may be lower than the selected after removing duplicates 
         n_split: used to split complement and analogous, higher value result in more colors
         n_split=0 only works with complement, it should be >=1 for analogous
-        use_random_split: if True, n_split will be generated randomly depending on the ref item, and used 
-        to find complement colors splitted on the query '''
+        '''
+                
+        wardrobe_obj = self.wardrobe_obj
+        print('Starting all vs all', wardrobe_obj.obj_name,' wardrobe items matching ...')
         
         dist_metric = []; catalogue_name = []
         self.wardrobe_sanity_check(wardrobe_obj, items_to_match)
         
-        for item_ref in items_to_match: # this mainly has one item, but did a for-loop for generality            
+        for item_ref in items_to_match: 
             for ref_img_name in wardrobe_obj.data_dict['colr_df'][item_ref].index:
                 p_ref = wardrobe_obj.data_dict['pix_cnt_df'][item_ref].loc[ref_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
                 c_ref = self.to_2D_mat(wardrobe_obj, item_ref, ref_img_name, 'colr_df')   
-                n_split = self.get_split_point(use_random_split, len(self.remove_nans_from_numpy(p_ref)), n_split )
                 items_to_match_minus_ref = items_to_match.copy()
                 items_to_match_minus_ref.remove(item_ref) # we are comparing each piece in item with the rest of items in items_to_match            
                 item_pairs = self.generage_item_pairs(wardrobe_obj, items_to_match_minus_ref)
                 # generate the colors of every query_image_name, then, find the distance with each single item
                 for items_query in item_pairs:
                     dist_item = 0; comp_conunt = 0
-                    if not isinstance(items_query, list): items_query=[items_query] # make it a list if it has only one item
+                    if not isinstance(items_query, tuple): items_query=[items_query] # make it a list if it has only one item
                     for query_img_name in items_query:                        
                         item_query_name = query_img_name[:query_img_name.find('_')]
                         p_query_orig = wardrobe_obj.data_dict['pix_cnt_df'][item_query_name].loc[query_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
                         c_query_orig = self.to_2D_mat(wardrobe_obj, item_query_name, query_img_name, 'colr_df')
                         # now, we have to find the color complement of c_query and compare it with the ref
                         query_color_pack = self.get_color_pack(c_query_orig, 
-                                                               p_query_orig, n_split, match_mode = match_mode) # we have to take the effect of the original probability and multiply it by the new one from the split, necessary when c_query_orig has more than one RGB with different probabilities
+                                                                p_query_orig, n_split, match_mode = match_mode) # we have to take the effect of the original probability and multiply it by the new one from the split, necessary when c_query_orig has more than one RGB with different probabilities
                                                 
                         for c_query_key in query_color_pack.keys():
                             ''' we need a distance for each pack, one for complement, one for analogous, etc... 
@@ -379,29 +384,25 @@ class ColorMatching():
                                                               c_ref, p_ref)
                     dist_metric.append(dist_item/comp_conunt) # much easier to store the distance separately, as we need it to find the min values to obtain the best matches
                     catalogue_name.append({ 'matched_items': sorted( list(items_query) + [ref_img_name]) }) # registering the catalogue that possibly matches the query
-                                     
-                        
-        print('------ There are ', comp_conunt*len(item_pairs)*len(ref_img_name)*len(items_to_match),
-                                      'compbinations for', items_to_match)
         result = self.sort_and_store_record(dist_metric, catalogue_name, num_best_maches)
-        result['info'].append(wardrobe_obj.data_dict['obj_name'])        
-        # result['match_mode'] = match_mode
+        result['info'].append( wardrobe_obj.data_dict['obj_name'])
+        result['matching x to y'] =  'Self Wardrobe'
+        result['match_mode'] =   match_mode   
         return result
+  
         
-    
 
     def user_wardrobe_vs_itself_matches(self, wardrobe_obj, items_to_match = ['jacket', 'pants' ], 
-                  num_best_maches = 10, n_split=1, match_mode = 'complement', use_random_split = True,
-                  single_query = None):
+                  num_best_maches = 10, n_split=1, match_mode = 'complement',
+                  query_to_match = None):
         '''match_mode: 
             - complement, complement_opposite, complement_shade
         - analogous, analogous_opposite, analogous_shade,     
         num_best_maches: the result may be lower than the selected after removing duplicates 
         n_split: used to split complement and analogous, higher value result in more colors
         n_split=0 only works with complement, it should be >=1 for analogous
-        use_random_split: if True, n_split will be generated randomly depending on the ref item, and used 
-        to find complement colors splitted on the query 
-        single_query = 'jacekt.png' ... will only compare the jacket to the rest of items in items_to_match,
+        
+        query_to_match = 'jacekt.png' ... will only compare the jacket to the rest of items in items_to_match,
         if None, will compare all to all in items_to_match
         
         '''
@@ -413,9 +414,9 @@ class ColorMatching():
         self.wardrobe_sanity_check(wardrobe_obj, items_to_match)  
         item_Q, item_R = items_to_match # this mainly has one item, but did a for-loop for generality                                      
                    
-        if single_query != None:      
-            Q_img_names = [single_query]            
-            item_R, item_Q = (item_R, item_Q) if single_query[:single_query.find('_')]==item_Q else (item_Q, item_R)
+        if query_to_match != None:      
+            Q_img_names = [query_to_match]  # we may flip the item_Q and item_R as they might not be in order          
+            item_R, item_Q = (item_R, item_Q) if query_to_match[:query_to_match.find('_')]==item_Q else (item_Q, item_R)
         else:            
             Q_img_names = wardrobe_obj.data_dict['colr_df'][item_Q].index
         
@@ -423,7 +424,7 @@ class ColorMatching():
         for Q_img_name in Q_img_names:          
             self.one_Q_to_many_R_match(Q_img_name, dist_metric, catalogue_name, 
                               n_split, R_item_pairs, item_R, wardrobe_obj, 
-                              match_mode, item_Q, use_random_split)                                       
+                              match_mode, item_Q)                                       
                             
         result = self.sort_and_store_record(dist_metric, catalogue_name, num_best_maches)
         result['info'].append( wardrobe_obj.data_dict['obj_name'])
@@ -432,130 +433,154 @@ class ColorMatching():
         
         return result
     
-    
+
+        
     def one_Q_to_many_R_match(self, Q_img_name, dist_metric, catalogue_name, 
-                              n_split, R_item_pairs, item_R, wardrobe_obj, 
-                              match_mode, item_Q, use_random_split):        
-        # generate the colors of every query_image_name, then, find the distance with each single item
+                          n_split, R_item_pairs, item_R, wardrobe_obj, 
+                          match_mode, item_Q):       
+        ''' Here, we compute the color pack for the query item, and compare the 
+        color pack to all the other items in the wardrobe. Not sure yet which one
+        works best ... this one or one_Q_to_many_R_match_swapped_items() ?
+        
+        '''
+        # generate the color pack for query_image, then, find the distance with each single item
         p_Q = wardrobe_obj.data_dict['pix_cnt_df'][item_Q].loc[Q_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
-        c_Q = self.to_2D_mat(wardrobe_obj, item_Q, Q_img_name, 'colr_df')   
-        n_split = self.get_split_point(use_random_split, len(self.remove_nans_from_numpy(p_Q)), n_split )
+        c_Q = self.to_2D_mat(wardrobe_obj, item_Q, Q_img_name, 'colr_df')           
+        Q_color_pack = self.get_color_pack(c_Q, p_Q, n_split, match_mode = match_mode) # we have to take the effect of the original probability and multiply it by the new one from the split, necessary when c_query_orig has more than one RGB with different probabilities
+        
         for R_img_name in R_item_pairs: # for query_img_name in wardrobe_obj.data_dict['colr_df'][item_query].index:                    
-            p_R_orig = wardrobe_obj.data_dict['pix_cnt_df'][item_R].loc[R_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
-            c_R_orig = self.to_2D_mat(wardrobe_obj, item_R, R_img_name, 'colr_df')
-            # now, we have to find the color complement of c_query and compare it with the ref
-            R_color_pack = self.get_color_pack(c_R_orig, p_R_orig, 
-                                                    n_split, match_mode = match_mode) # we have to take the effect of the original probability and multiply it by the new one from the split, necessary when c_query_orig has more than one RGB with different probabilities
+            p_R = wardrobe_obj.data_dict['pix_cnt_df'][item_R].loc[R_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
+            c_R = self.to_2D_mat(wardrobe_obj, item_R, R_img_name, 'colr_df')
+            # now, we have to find the color complement of c_query and compare it with the ref                
                                     
-            for c_R_key in R_color_pack.keys(): # ''' we need a distance for each pack, if it is a multi pack '''
-                c_R_instance = R_color_pack[c_R_key]['color']                            
-                p_R_instance = R_color_pack[c_R_key]['prob'] # this is the resutlant split probabilit multiplied by the prior p0=p_query_orig, that is, low values p_query_orig should penalize the new colors                                    
-                dist_item = self.find_e_distance(c_R_instance, 
-                                                  p_R_instance, 
-                                                  c_Q, p_Q)  
+            for c_Q_key in Q_color_pack.keys(): # ''' we need a distance for each pack, if it is a multi pack '''
+                c_Q_instance = Q_color_pack[c_Q_key]['color']                            
+                p_Q_instance = Q_color_pack[c_Q_key]['prob'] # this is the resutlant split probabilit multiplied by the prior p0=p_query_orig, that is, low values p_query_orig should penalize the new colors                                    
+                dist_item = self.find_e_distance(c_Q_instance, p_Q_instance, 
+                                                 c_R, p_R)  
                 dist_metric.append(dist_item) # much easier to store the distance separately, as we need it to find the min values to obtain the best matches
                 catalogue_name.append({'matched_items': sorted((R_img_name, Q_img_name))                                        
                                         
                                         }) # registering the catalogue that possibly matches the query
-       
+
     
+    def match_engine(self, query_to_match, items_to_match, n_split,  
+                     match_mode):
+        ''' 
+        
+        query_to_match 
+            - "xx.jpg", matches xx () to other items            
+        match_mode
+            - complement, complement_opposite, complement_shade (colorful)
+            - analogous (elegant), analogous_opposite, analogous_shade,     
+                
+            '''        
+        print("\n Matching",query_to_match, 'with all items in', self.wardrobe_obj.obj_name )
+        result = {}    
+        item_query = query_to_match[:query_to_match.find('_')]
+        items_to_match.remove(item_query)
+        for i, item_ref in enumerate(items_to_match):
+            items_pair = [item_ref] + [item_query]
+            result[item_ref+'X'+query_to_match] = self.user_wardrobe_vs_itself_matches(self.wardrobe_obj, 
+                                                items_to_match = items_pair,                                         
+                                                num_best_maches = 10, 
+                                                n_split = n_split,
+                                                query_to_match = query_to_match,
+                                                match_mode = match_mode)
+        matched_items = []
+        for rest_key in result.keys():
+            z = result[rest_key]['catalogue_name'][0]['matched_items'].copy()
+            z.remove(query_to_match)
+            matched_items.append(z[0])
+        
+        print(query_to_match, 'goes well with',  matched_items[0], 'and', matched_items[1])
+       
+        
+        return result # returning the result for debugging purposes, for now        
 
-x = ColorMatching()
-catalogue = 'ref_clothCoP'
-ref_obj = ColorTable(fashion_obj_name='Catalogue '+catalogue) 
-ref_obj.load('ref_clothCoP.pkl')
 
-wardrobe_user_name = 'malrawi'
-user_obj = ColorTable(fashion_obj_name = 'Wardrobe of '+ wardrobe_user_name) 
-user_obj.load( wardrobe_user_name +'.pkl')
-
-items_to_match = ['shirt',  'pants'] # ['jacket', 'shirt', 'pants']
-# result = x.ref_v_ref_matches(ref_obj, user_obj, items_to_match, num_best_maches = 4)
-# result = x.user_wardrobe_v_ref_matches(ref_obj, user_obj, 
-#                                         items_to_match, 
-#                                         num_best_maches = 10)
 
 
 '''  match_mode
-        - complement, complement_opposite, complement_shade
-        - analogous, analogous_opposite, analogous_shade,     
+        - complement, complement_opposite, complement_shade (colorful)
+        - analogous (elegant), analogous_opposite, analogous_shade,     
 '''     
+match_mode = 'analogous'
+n_split = 3
+query_to_match = 'jacket_6.png' 
+items_to_match = [ 'shirt',  'pants', 'jacket']  # items_to_match = ['t-shirt',  'pants', 'jacket'] 
+wardrobe_name = 'malrawi'
+catalogue_name = 'ref_clothCoP'
+col_match_obj = ColorMatching(wardrobe_name, catalogue_name)
 
-for i in range(100):
-    result_1 = x.user_wardrobe_vs_itself_matches(user_obj, 
-                                            items_to_match,                                         
-                                            num_best_maches = 10, 
-                                            n_split = 0,
-                                            single_query = 'shirt_1.png',
-                                            match_mode = 'analogous_opposite')
-    
-    
-    items_to_match = ['jacket', 'shirt'] 
-    result_2 = x.user_wardrobe_vs_itself_matches(user_obj, 
-                                            items_to_match,                                         
-                                            num_best_maches = 10, 
-                                            n_split = 0,
-                                            single_query = 'shirt_1.png',
-                                            match_mode = 'analogous_opposite')
+# matching a query-item to all the wardrobe
+result_1 = col_match_obj.match_engine(query_to_match, items_to_match, n_split, 
+                           match_mode)
+
+# matching items from the wardrobne according to the catalogue
+result_2 = col_match_obj.user_wardrobe_v_ref_matches(items_to_match, 
+                                                     num_best_maches = 20,
+                                                     verbose= False) # after removing duplicates, we'll get less than the targeted num_best_matches
+
+# matching all vs all items in the wardrobe
+result_3 = col_match_obj.user_wardrobe_vs_itself_matches_multi(items_to_match, 
+                                                                n_split= n_split, 
+                                                                match_mode = match_mode)
+
+
+
 
                 
-    # def get_colors_from_results(r_obj, result):
-    #     ''' TODO '''
-    #     for i in range(len(result['catalogue_name'])):
-    #         query = result['catalogue_name'][i]['query'] # in the future, this should be a list of images, for each of the matched_items
-    #         color_mathces_catalogue_name = result['catalogue_name'][i]['reference']
-    #         matched_items = result['catalogue_name'][i]['matched_items']
-                            
-    #     return 0
 
 
-# def user_wardrobe_vs_itself_matches_old_nov19_6pm(self, wardrobe_obj, items_to_match = ['jacket', 'pants', 'shirt' ], 
-#                   num_best_maches = 10, n_split=1, match_mode = 'complement', use_random_split = False):
-#         '''match_mode: complement, analogous, mix (has analogous, complement, opposite, and shade) 
-#         num_best_maches: the result may be lower than the selected after removing duplicates 
-#         n_split: used to split complement and analogous, higher value result in more colors
-#         n_split=0 only works with complement, it should be >=1 for analogous
-#         use_random_split: if True, n_split will be generated randomly depending on the ref item, and used 
-#         to find complement colors splitted on the query '''
-        
-#         ''' IDEA: maybe we can keep only the major color in each item
-#         then, for generate a complement wheel, randomly pick a color for each of the items '''
-        
-#         dist_metric = []; catalogue_name = []
-#         self.wardrobe_sanity_check(wardrobe_obj, items_to_match)  
-#         item_ref = items_to_match[0] # this mainly has one item, but did a for-loop for generality                                      
-#         item_query = items_to_match[1]        
-#         query_item_pairs = self.generage_item_pairs(wardrobe_obj, [item_query])
-        
-#         for ref_img_name in wardrobe_obj.data_dict['colr_df'][item_ref].index:
-#             p_ref = wardrobe_obj.data_dict['pix_cnt_df'][item_ref].loc[ref_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
-#             c_ref = self.to_2D_mat(wardrobe_obj, item_ref, ref_img_name, 'colr_df')   
-#             n_split = self.get_split_point(use_random_split, len(self.remove_nans_from_numpy(p_ref)), n_split )
-            
-#             # generate the colors of every query_image_name, then, find the distance with each single item
-#             for query_img_name in query_item_pairs: # for query_img_name in wardrobe_obj.data_dict['colr_df'][item_query].index:                    
-#                 p_query_orig = wardrobe_obj.data_dict['pix_cnt_df'][item_query].loc[query_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
-#                 c_query_orig = self.to_2D_mat(wardrobe_obj, item_query, query_img_name, 'colr_df')
-#                 # now, we have to find the color complement of c_query and compare it with the ref
-#                 query_color_pack = self.get_color_pack(c_query_orig, p_query_orig, 
-#                                                         n_split, match_mode = match_mode) # we have to take the effect of the original probability and multiply it by the new one from the split, necessary when c_query_orig has more than one RGB with different probabilities
-                                        
-#                 for c_query_key in query_color_pack.keys(): # ''' we need a distance for each pack, if it is a multi pack '''
-#                     c_query_instance = query_color_pack[c_query_key]['color']                            
-#                     p_query_instance = query_color_pack[c_query_key]['prob'] # this is the resutlant split probabilit multiplied by the prior p0=p_query_orig, that is, low values p_query_orig should penalize the new colors                                    
-#                     dist_item = self.find_e_distance(c_query_instance, 
-#                                                       p_query_instance, 
-#                                                       c_ref, p_ref)  
-#                     dist_metric.append(dist_item) # much easier to store the distance separately, as we need it to find the min values to obtain the best matches
-#                     catalogue_name.append({'query': items_to_match, 
-#                                             'reference': 'Self Wardrobe', 
-#                                             'matched_items': sorted((query_img_name, ref_img_name)),
-#                                             'color-match': match_mode
-#                                             }) # registering the catalogue that possibly matches the query
-                                             
+
+
+
+
+
+
+
+
+
+
+
+
+# def get_colors_from_results(r_obj, result):
+#     ''' TODO '''
+#     for i in range(len(result['catalogue_name'])):
+#         query = result['catalogue_name'][i]['query'] # in the future, this should be a list of images, for each of the matched_items
+#         color_mathces_catalogue_name = result['catalogue_name'][i]['reference']
+#         matched_items = result['catalogue_name'][i]['matched_items']
                         
-#         result = self.sort_and_store_record(dist_metric, catalogue_name, num_best_maches)
-#         result['info'].append(wardrobe_obj.data_dict['obj_name'])        
-#         return result
-    
-    
+#     return 0
+
+
+    # # Depriciated
+    # def one_Q_to_many_R_match_swapped_items(self, Q_img_name, dist_metric, catalogue_name, 
+    #                           n_split, R_item_pairs, item_R, wardrobe_obj, 
+    #                           match_mode, item_Q):        
+    #     ''' Swapped items ... here, we compute the color pack for the reference list of items, 
+    #     that is the other items in the wardrobe'''
+    #     # generate the colors of every ref_item, then, find the distance with each the query image
+    #     p_Q = wardrobe_obj.data_dict['pix_cnt_df'][item_Q].loc[Q_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
+    #     c_Q = self.to_2D_mat(wardrobe_obj, item_Q, Q_img_name, 'colr_df')   
+    #     for R_img_name in R_item_pairs: # for query_img_name in wardrobe_obj.data_dict['colr_df'][item_query].index:                    
+    #         p_R_orig = wardrobe_obj.data_dict['pix_cnt_df'][item_R].loc[R_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
+    #         c_R_orig = self.to_2D_mat(wardrobe_obj, item_R, R_img_name, 'colr_df')
+    #         # now, we have to find the color complement of c_query and compare it with the ref
+    #         R_color_pack = self.get_color_pack(c_R_orig, p_R_orig, 
+    #                                                 n_split, match_mode = match_mode) # we have to take the effect of the original probability and multiply it by the new one from the split, necessary when c_query_orig has more than one RGB with different probabilities
+                                    
+    #         for c_R_key in R_color_pack.keys(): # ''' we need a distance for each pack, if it is a multi pack '''
+    #             c_R_instance = R_color_pack[c_R_key]['color']                            
+    #             p_R_instance = R_color_pack[c_R_key]['prob'] # this is the resutlant split probabilit multiplied by the prior p0=p_query_orig, that is, low values p_query_orig should penalize the new colors                                    
+    #             dist_item = self.find_e_distance(c_R_instance, 
+    #                                               p_R_instance, 
+    #                                               c_Q, p_Q)  
+    #             dist_metric.append(dist_item) # much easier to store the distance separately, as we need it to find the min values to obtain the best matches
+    #             catalogue_name.append({'matched_items': sorted((R_img_name, Q_img_name))                                        
+                                        
+    #                                     }) # registering the catalogue that possibly matches the query
+
+
+        

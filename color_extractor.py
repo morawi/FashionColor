@@ -9,11 +9,6 @@ Created on Mon Jun 15 16:44:59 2020
 import numpy as np
 from sklearn.cluster import KMeans
 from collections import Counter
-# import matplotlib
-# matplotlib.use("TkAgg")
-# backend string are ['GTK3Agg', 'GTK3Cairo', 'MacOSX', 'nbAgg', 'Qt4Agg', 
-# 'Qt4Cairo', 'Qt5Agg', 'Qt5Cairo', 'TkAgg', 'TkCairo', 'WebAgg', 'WX', 'WXAgg',
-# 'WXCairo', 'agg', 'cairo', 'pdf', 'pgf', 'ps', 'svg', 'template']
 import matplotlib.pyplot as plt
 from color_utils import merge_clusters, RGB2HEX # remove_image_background # , save_masked_image
 from color_names import ColorNames
@@ -31,7 +26,7 @@ class ColorExtractor():
         # input        
         self.class_names_and_colors = class_names_and_colors
         self.color_upr_bound = cnf.color_upr_bound
-        self.number_of_colors = cnf.num_colors # I think this is not used any more
+        # self.number_of_colors = cnf.num_colors # I think this is not used any more
         self.max_num_colors = cnf.max_num_colors        
         self.color_names_obj = ColorNames()
         self.clustering_method = cnf.clustering_method
@@ -39,15 +34,12 @@ class ColorExtractor():
         self.find_no_clusters_method = cnf.find_no_clusters_method     
         
         # computed values           
-        self.item={}                  
-        
-        self.labels = data_pack['labels']
-        # self.find_colors_via_clustering(data_pack['all_images_no_bkg'], data_pack['num_pixels_in_items'])
-        # self.find_colors_via_clustering(all_images_no_bkg, num_pixels_in_items, label_val)
+        self.item={}                          
+        self.labels = data_pack['labels']        
         self.find_colors(data_pack)
          
         
-    def pie_chart(self, image, figure_size=(9, 6), fname=None):        
+    def pie_chart(self, image, figure_size=(9, 6), fname=None, save_image = False):        
         
         for j, label_val in enumerate(self.labels):                 
             pixel_counts, hex_colors = zip(*[( item[0], RGB2HEX(item[1])) 
@@ -64,9 +56,9 @@ class ColorExtractor():
             #         rotatelabels = False)            
                                    
             if fname:    
-                plt.savefig('./Figures/' + label_val+'-'+fname + '_ncol='+ str(self.number_of_colors) + '_' + self.labels[j] +'.png')            
+                plt.savefig('./Figures/' + label_val+'-'+fname + '_ncol='+ '_' +'.png')            
             plt.close()
-        if fname: image.save('./Figures/' + fname +'.jpg') # saving the original image for comparision
+        if save_image: image.save('./Figures/' + fname +'.jpg') # saving the original image for comparision
         
         plt.close()
    
@@ -84,8 +76,7 @@ class ColorExtractor():
         we may select the min based on a threshold value 
         ''' 
                
-        gm_scores = np.array([])        
-        # num_clusters = self.class_names_and_colors[label_val] if self.color_upr_bound else no_clusters
+        gm_scores = np.array([])                
         for no_clusters_idx in range(1,num_clusters+1):
             counts, colors_centers, clf = clf_model(image, no_clusters_idx, label_val)            
             if self.find_no_clusters_method == 'kmeans':
@@ -94,7 +85,10 @@ class ColorExtractor():
                 gm_scores = np.append(gm_scores,  abs(clf.score(colors_centers)))
                 
             
-            
+        plot_graph=True  
+        
+        
+        
         if plot_graph:
             plt.plot(gm_scores)           
             plt.rcParams.update({'font.size': 16})       
@@ -132,25 +126,34 @@ class ColorExtractor():
         print('predicted no of colors', predicted_no_colors, '\n\n')              
         return predicted_no_colors        
         
-          
+    
+    
+    
+    
+        
+    ''' 
+    NOTE: It is important to always set the random state to a fixed value, 
+    to enable reproducibility of results 
+    '''
     def bgmm_model(self, image, no_clusters,label_val):
         ''' Runs Bayes GMM model and returns the colors and the counts (num of pixels) for each color'''
         
         print('Bayes GMM')
         bgmm = BayesianGaussianMixture(n_components=no_clusters, 
                                        random_state=1,
-                                       n_init=2, # using more number of init is not good, will lead to overfitting
-                                       covariance_type = 'tied',
-                                       mean_precision_prior=1e-2, 
-                                       covariance_prior=1e0 * np.eye(3),
-                                       weight_concentration_prior=0.005,                                      
-                                      max_iter=100)
+                                       n_init=1, # using more number of init is not good, will lead to overfitting
+                                       covariance_type = 'tied', #  'tied', # 'full',
+                                       #  mean_precision_prior=1e-2, 
+                                       #  covariance_prior=1e0 * np.eye(3),
+                                       #  weight_concentration_prior=0.005,                                      
+                                       # max_iter=100
+                                      )
         bgmm.fit(image)
         pred_labels  = bgmm.predict(image)
         counts = Counter(pred_labels)
         colors_centers = np.uint8(bgmm.means_.round()) #  gmm.means_ # 
-        for i in range(0,len(counts)): 
-            if counts[i]==0: counts[i]=0 # if counts[i] does not exist (value 0, not sure whay this is happening), fill it with zero to prevent problems later            
+        for i in range(0,len(colors_centers)): 
+            if counts[i]==0: counts[i]=0 # if counts[i] does not exist (value 0, as the model will not detect the lable in the prediction if it is not in the data)
         return counts, colors_centers, bgmm    
     
     
@@ -160,8 +163,8 @@ class ColorExtractor():
         ''' Runs GMM model and returns the colors and the counts (num of pixels) for each color'''
         
         gmm = GaussianMixture(n_components=no_clusters, 
-                              #random_state=1,
-                              n_init=8, # using more number of init is not good, will lead to overfitting
+                              random_state=1,
+                              n_init=4, # using more number of init is not good, will lead to overfitting
                               covariance_type = 'tied', #{'full', 'tied', 'diag', 'spherical')
                               max_iter=100,
                               )
@@ -169,8 +172,8 @@ class ColorExtractor():
         pred_labels  = gmm.predict(image)
         counts = Counter(pred_labels)
         colors_centers = np.uint8(gmm.means_.round()) #  gmm.means_ # 
-        for i in range(0,len(counts)): 
-            if counts[i]==0: counts[i]=0 # if counts[i] does not exist (value 0, not sure whay this is happening), fill it with zero to prevent problems later            
+        for i in range(0,len(colors_centers)): 
+            if counts[i]==0: counts[i]=0 # if counts[i] does not exist (value 0, as the model will not detect the lable in the prediction if it is not in the data)
         return counts, colors_centers, gmm
    
     
@@ -181,10 +184,10 @@ class ColorExtractor():
         ''' Runs k-means model and returns the colors and the counts (num of pixels) for each color '''
         clf = KMeans(n_clusters = no_clusters, 
                      n_jobs=30, 
-                     n_init=50, 
+                     n_init=24, # 8
                      random_state=1,
                      tol=1e-4, 
-                     max_iter=300, 
+                     max_iter=100, 
                      init='k-means++')
                          # we are using higher number of max_iter and n_init for better convergence
         pred_labels = clf.fit_predict(image)
@@ -192,6 +195,7 @@ class ColorExtractor():
         colors_centers = np.uint8(clf.cluster_centers_.round())
         return counts, colors_centers, clf
         
+    
     
     def get_k_model_name(self):
         ''' Rerunrs the model to be used, the input is the model name '''
@@ -286,9 +290,7 @@ class ColorExtractor():
         thus, retaining 10 other colors out of 20 '''
         
         #  pixels sums and corresponding colors
-        colr_cutoff_probability = 0.5 # if self.clustering_method == 'gmm' else 0.5
-        numpixels_and_colors = []
-        total_sum = 0
+        colr_cutoff_probability = 0.5; numpixels_and_colors = [];  total_sum = 0
         
         # sorting the indices according to pixel count    
         sorted_indxs = np.flip(np.argsort(pixsum)) 
@@ -326,20 +328,15 @@ class ColorExtractor():
         
         
     
-    def find_colors_via_clustering(self, all_images_no_bkg, num_pixels_in_items, label_val):
+    def find_colors_via_clustering(self, image_no_bkg, num_pixels_in_items, label_val):
         '''  Clustering_3D_1D is based on three-values; R, G, B, and then, on 1D via h value from hsv
         use_num_pixels_percentage (p) the percentage denotes the probability of a color, 
         since we are picking max_num_colors out of the available 
         number_of_colors the sum will not be 1, the sum will one
-        if and only if max_num_colors equals number_of_colors    '''
-        
-        image_no_bkg = all_images_no_bkg           
-        if len(image_no_bkg) < self.number_of_colors:
-            no_clusters = len(image_no_bkg)
-        else: no_clusters = self.number_of_colors
+        if and only if max_num_colors equals number_of_colors    '''       
         
         counts_from_cluster, colors_centers = self.get_colors_cluster(image_no_bkg, 
-                                                                      no_clusters=no_clusters,
+                                                                      no_clusters=len(image_no_bkg),
                                                                       clustering_method = self.clustering_method,
                                                                       label_val=label_val)            
         # normalizing the counts to values between 0 and 1
@@ -350,35 +347,8 @@ class ColorExtractor():
         numpixels_and_colors = self.remove_low_probability_colors(pixsum, colors_grouped) 
            
         return numpixels_and_colors
-        
-            
-        
-    # def find_colors_via_clustering_old(self, all_images_no_bkg, num_pixels_in_items):
-    #     '''  Clustering_3D_1D is based on three-values; R, G, B, and then, on 1D via h value from hsv
-    #     use_num_pixels_percentage (p) the percentage denotes the probability of a color, 
-    #     since we are picking max_num_colors out of the available 
-    #     number_of_colors the sum will not be 1, the sum will one
-    #     if and only if max_num_colors equals number_of_colors    '''
-        
-    #     for class_id, label_val in enumerate(self.labels):                          
-    #         image_no_bkg = all_images_no_bkg[class_id]             
-    #         if len(image_no_bkg) < self.number_of_colors:
-    #             no_clusters = len(image_no_bkg)
-    #         else: no_clusters = self.number_of_colors
-            
-    #         counts_from_cluster, colors_centers = self.get_colors_cluster(image_no_bkg, 
-    #                                                                       no_clusters=no_clusters,
-    #                                                                       clustering_method = self.clustering_method,
-    #                                                                       label_val=label_val)            
-    #         # normalizing the counts to values between 0 and 1
-    #         for i, key in enumerate(counts_from_cluster.keys()): 
-    #             counts_from_cluster[i] =  counts_from_cluster[i]/num_pixels_in_items[class_id] 
-             
-    #         pixsum, colors_grouped = self.get_colors_via_hue(colors_centers, counts_from_cluster)            
-    #         numpixels_and_colors = self.remove_low_probability_colors(pixsum, colors_grouped)            
-    #         self.item[label_val] = numpixels_and_colors
-        
-        
+                 
+                
     def __getitem__(self):   
         return self.item       
 
@@ -398,3 +368,8 @@ class ColorExtractor():
     
 '''
 
+# import matplotlib
+# matplotlib.use("TkAgg")
+# backend string are ['GTK3Agg', 'GTK3Cairo', 'MacOSX', 'nbAgg', 'Qt4Agg', 
+# 'Qt4Cairo', 'Qt5Agg', 'Qt5Cairo', 'TkAgg', 'TkCairo', 'WebAgg', 'WX', 'WXAgg',
+# 'WXCairo', 'agg', 'cairo', 'pdf', 'pgf', 'ps', 'svg', 'template']

@@ -11,16 +11,15 @@ from generate_colors import *
 
 min_rgb = 0; max_rgb = 256; rgb_val = np.random.randint(min_rgb, high=max_rgb, size=3, dtype = 'uint8')
 #rgb_val  = [15, 76, 129]  # '''  Use panton clor values '''  15 76 129;  162 36 47 # Panton colors https://www.pantone.com/color-intelligence/fashion-color-trend-report/new-york-autumn-winter-2020-2021
-# rgb_val= [255, 0, 255]
-n_split = 4
+rgb_val= [255, 0, 0]
+n_split = 3
 generate_all_col = False
 
 if generate_all_col:
     color_pack = generate_pack_of_colors(rgb_val, n_split= n_split, match_mode = 'complement' )
 else:
     
-    fname= str(rgb_val)+ '-'+ str(n_split)+'-split'
-    analogous_bool=True # when this is True, we get the analogous and not the complement
+    fname= str(rgb_val)+ '-'+ str(n_split)+'-split'    
     design_pattern= get_n_split_complementary(rgb_val, 
                                               p_major = 1/ (2*n_split+1), # this value only when analogous_bool=False
                                               perc_upper=0.1, 
@@ -40,9 +39,9 @@ else:
     
     design_pattern_comp= get_n_split_complementary(rgb_val, 
                                               p_major = 1/ (2*n_split+1), # this value only when analogous_bool=False
-                                              perc_upper=0.1, 
                                               n_step=n_split, 
-                                              match_mode= 'complement')
+                                              match_mode= 'complement', 
+                                              keep_original_color = True)
     color_pie_chart(design_pattern_comp, fname=fname)
     print(n_split, 'Complement')
     

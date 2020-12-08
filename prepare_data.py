@@ -57,46 +57,11 @@ def get_images_from_wardrobe(path_to_wardrobe= 'C:/MyPrograms/Data/Wardrobe/', u
         record['num_pixels_in_items'] = np.sum(mask)
         record['labels'] = [label_val[:label_val.find('_')] ] # removing what comes after, in the wardrobe, we may have several jackets, so, they are named jacket_1.png, jacket_2.png 
         record['img_name']= fname
-        data_pack.append(record)            
+        data_pack.append(record)          
     
     return data_pack
 
-
     
 
-data_pack = get_images_from_wardrobe(user_name='malrawi')
+# data_pack = get_images_from_wardrobe(user_name='malrawi')
 
-
-
-
-
-
-
-
-
-# def get_images_from_wardrobe_old(path_to_wardrobe= 'C:/MyPrograms/Data/Wardrobe/', user_name='malrawi'):
-#     path_to_folder = path_to_wardrobe + user_name
-    
-#     fnames = listdir(path_to_folder) # each image named as a lable, skir.jpg; jacket.jpg, etc
-#     # labels = path.splitext(fnames)[0] # removing the extensoin to get the label
-    
-#     data_pack={}; all_images_no_bkg = []; num_pixels_in_items = []
-#     all_labels = []  # labels after cleaning, as we will be using them to reaon fashion matching; like, shirt goes with a pant, but shirt does not go with a shirt, and the likes
-    
-    
-#     for fname in fnames:
-#         label_val = path.splitext(fname)[0]        
-#         img  = Image.open(path_to_folder+'/'+fname)
-#         mask = np.array(img.getchannel('A').convert('1'), dtype=np.bool_) # the alpha band is used to store the mask        
-#         img  = np.array(img.convert('RGB'), dtype='uint8')
-#         all_images_no_bkg.append(remove_image_background(img, mask = mask))
-#         num_pixels_in_items.append(np.sum(mask))
-#         all_labels.append( label_val[:label_val.find('_')) # removing what comes after, in the wardrobe, we may have several jackets, so, they are named jacket_1.png, jacket_2.png 
-#         # all_fnames.append(fname)
-
-#     data_pack['all_images_no_bkg'] = all_images_no_bkg
-#     data_pack['num_pixels_in_items'] = num_pixels_in_items
-#     data_pack ['labels'] = all_labels
-#     data_pack ['img_name'] = fnames
-    
-#     return data_pack

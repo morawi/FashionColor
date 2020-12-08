@@ -44,7 +44,7 @@ class ColorTable():
         self.obj_name = fashion_obj_name
         # nself.num_entries = 0  # each person outfit has one entry / instance                 
                 
-    def save(self, fname, path = 'C:/MyPrograms/FashionColor/ColorFiles/'):
+    def save(self, fname, path = 'C:/MyPrograms/FashionColor/ColorModelFiles/'):
         '''  save data_dict to file  '''               
         
         with open(path+fname, 'wb') as fp:
@@ -53,7 +53,7 @@ class ColorTable():
         #     json.dump(data, fp)
                 
         
-    def load(self, fname, path = 'C:/MyPrograms/FashionColor/ColorFiles/'):   
+    def load(self, fname, path = 'C:/MyPrograms/FashionColor/ColorModelFiles/'):   
         with open(path+fname, 'rb') as fp:
             self.data_dict = pickle.load(fp)
                       

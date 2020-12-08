@@ -36,7 +36,7 @@ https://stackoverflow.com/questions/40900608/cosine-similarity-on-large-sparse-m
 """
 
 
-import numpy as np
+# import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -60,7 +60,7 @@ def cosine_pairwise(x):
 
 def euclidean_distance(x1, x2, p=2.0):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')    
-    euc_dist =torch.cdist(torch.tensor(x1).to(device), 
+    euc_dist = torch.cdist(torch.tensor(x1).to(device), 
                           torch.tensor(x2).to(device), 
                           p=2.0, compute_mode='use_mm_for_euclid_dist_if_necessary')
     return euc_dist.cpu().numpy()

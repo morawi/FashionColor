@@ -107,7 +107,7 @@ class ColorExtractor():
            etc. '''
         
         first_min = np.argmin(gm_scores)
-        second_min = np.argmin(gm_scores[gm_scores !=np.amin(gm_scores)])
+        second_min = np.argmin(gm_scores[gm_scores != np.amin(gm_scores)])
         
         if second_min < first_min:
             predicted_no_colors = second_min

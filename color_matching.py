@@ -14,7 +14,7 @@ import itertools
 from generate_colors import generate_pack_of_colors
 import copy
 from colorsys import rgb_to_hsv
-from ciecam02 import rgb2jch # , jch2rgb # https://pypi.org/project/ciecam02/
+# from ciecam02 import rgb2jch # , jch2rgb # https://pypi.org/project/ciecam02/
 import sys
 
 class ColorMatching():
@@ -22,6 +22,9 @@ class ColorMatching():
     Each outfit is stored into a single table. Tables of several outfits can be appended '''
     def __init__(self, wardrobe_name=None, catalogue_name=None):
         
+        if wardrobe_name is None and catalogue_name is None:
+            print('no catalogue has been selected')
+            sys.exit()
         self.wardrobe_obj=None
         self.ref_obj=None 
         if wardrobe_name is not None:
@@ -232,7 +235,7 @@ class ColorMatching():
             self.wardrobe_sanity_check(wardrobe_obj, items_to_match)
                                    
             dist_metric = [];  catalogue_name = []
-            print('\n Matching', self.wardrobe_obj.obj_name, 'with', self.ref_obj.obj_name, 'catalogue' )
+            print('\n Matching', wardrobe_obj.obj_name, 'with', self.ref_obj.obj_name, 'catalogue' )
             item_pairs = self.generage_item_pairs(wardrobe_obj, items_to_match)              
                 
             for ref_img_name in self.get_image_names(self.ref_obj):
@@ -455,9 +458,9 @@ class ColorMatching():
         Q_color_pack = self.get_color_pack(c_Q, p_Q, n_split, match_mode = match_mode) # we have to take the effect of the original probability and multiply it by the new one from the split, necessary when c_query_orig has more than one RGB with different probabilities
         
         
-        from generate_colors import color_pie_chart; color_pie_chart(Q_color_pack[match_mode])
+        from generate_colors import color_pie_chart;  color_pie_chart(Q_color_pack[match_mode])
         
-        for R_img_name in R_item_pairs: # for query_img_name in wardrobe_obj.data_dict['colr_df'][item_query].index:                    
+        for R_img_name in R_item_pairs: # for query_img_name in wardrobe_obj.data_dict['colr_df'][item_query].index:                                
             p_R = wardrobe_obj.data_dict['pix_cnt_df'][item_R].loc[R_img_name].values # for the wardrobe, the image_name is used instead of the item in the pandas table
             c_R = self.to_2D_mat(wardrobe_obj, item_R, R_img_name, 'colr_df')
             # now, we have to find the color complement/analogous/etc of c_query and compare it with the ref                
@@ -510,27 +513,28 @@ class ColorMatching():
 
     
 
-    def find_e_distance(self, c_ref, p_ref, c_query, p_query, match_mode, use_hsv = True):
+    def find_e_distance(self, c_ref, p_ref, c_query, p_query, match_mode, use_hsv = False, alpha=1/4):
         ''' 
-            Foinds the distance between two sets of colors, and having corresponding 
-            probabilities
-        '''      
-        if match_mode == 'monochromatic':
-            use_hsv = False            
+            Finds the distance between two sets of colors that having corresponding 
+            probabilities.
+            
+        '''              
         
-        alpha = 1/4 #
+        # # seems that HSV does not work well ... this is because h and s are ranged [0,1], but v ranged [0, 255]
+        # use_hsv=True
+        # if match_mode == 'monochromatic' or match_mode == 'purity':
+        #     use_hsv = False                           
         
-        use_ciecam02 = False # not sure if this is doing a good job, hsv is better!
-                
-        if use_hsv:            
-            c_query = self.remove_2D_nans_from_numpy(c_query)                        
-            c_ref = self.remove_2D_nans_from_numpy(c_ref)
-            if use_ciecam02:
-                c_query = rgb2jch(c_query)
-                c_ref   = rgb2jch(np.array(c_ref))                 
-            else:                
-                c_query = self.rgb2hsv(c_query)
-                c_ref = self.rgb2hsv(c_ref)  
+        # use_ciecam02 = False # not sure if this is doing a good job, hsv is better!                
+        # if use_hsv:            
+        #     c_query = self.remove_2D_nans_from_numpy(c_query)                        
+        #     c_ref = self.remove_2D_nans_from_numpy(c_ref)
+        #     if use_ciecam02:
+        #         c_query = rgb2jch(c_query)
+        #         c_ref   = rgb2jch(np.array(c_ref))                 
+        #     else:                
+        #         c_query = self.rgb2hsv(c_query)
+        #         c_ref = self.rgb2hsv(c_ref)  
                     
         dist_clr = euclidean_distance(np.array(c_ref, dtype=float), np.array(c_query, dtype=float))
                 
@@ -542,14 +546,10 @@ class ColorMatching():
         prob_diff  = np.array(p_ref, dtype=float).reshape(-1,1) - np.array(p_query, dtype=float)
         prob_diff = abs(self.remove_nans_from_numpy(prob_diff))
         z_prob  = 1-  np.array(p_ref, dtype=float).reshape(-1,1) * np.array(p_query, dtype=float)
-        z_prob = self.remove_nans_from_numpy(z_prob)
-                
-        posteriori_prob = dist_clr + alpha*(prob_diff+z_prob)/2
-        # print('----', dist_clr, '...\n',  prob_diff)        
-                
+        z_prob = self.remove_nans_from_numpy(z_prob)                
+        posteriori_prob = dist_clr + alpha*(prob_diff+z_prob)/2                        
         print('possible error as min of colros match is 0 ... ') if np.min(posteriori_prob)==0 else None            
-            
-        # return np.min(posteriori_prob) # if we are looking for the one best match
+                    
         return np.mean(np.sort(posteriori_prob)[:2])
 
 
@@ -561,29 +561,30 @@ class ColorMatching():
         - purity: changes color purity (saturation)
 '''     
 match_mode = 'purity'
-n_split = 8
-query_to_match = 'jacket_2.png' 
-items_to_match = [ 'shirt',  'pants', 'jacket']  # items_to_match = ['t-shirt',  'pants', 'jacket'] 
+n_split = 10
+query_to_match = 'jacket_5.png' 
+items_to_match = [ 'shirt',  'pants', 'jacket']  # 
+# items_to_match = ['t-shirt',  'pants', 'jacket'] 
 wardrobe_name = 'malrawi'
 catalogue_name = ['ref_clothCoP', None ]# this is the name of the pickle file where the reference is stored
-col_match_obj = ColorMatching(wardrobe_name, catalogue_name= catalogue_name[0])
-
+col_match_obj = ColorMatching(wardrobe_name=wardrobe_name, catalogue_name= catalogue_name[1])
 
 
 # matching a query-item to all the items in the wardrobe
-result_1 = col_match_obj.match_engine(query_to_match, items_to_match, n_split, match_mode)
+result_qry_vs_wdb = col_match_obj.match_engine(query_to_match, items_to_match, n_split, match_mode)
 
-
-# matching items from the wardrobne according to the catalogue REF
-result_2 = col_match_obj.user_wardrobe_v_ref_matches(items_to_match, 
-                                                      num_best_maches = 20,
-                                                      verbose= False) # after removing duplicates, we'll get less than the targeted num_best_matches
 
 # matching all vs all items in the wardrobe
-result_3 = col_match_obj.user_wardrobe_vs_itself_matches_all_vs_all(items_to_match, 
-                                                                n_split= n_split, 
-                                                                match_mode = match_mode)
+# result_wdb_vs_wdb = col_match_obj.user_wardrobe_vs_itself_matches_all_vs_all(items_to_match, 
+#                                                                 n_split= n_split, 
+#                                                                 match_mode = match_mode)
 
+
+
+# # matching items from the wardrobne according to the catalogue REF
+# result_wdb_vs_ref = col_match_obj.user_wardrobe_v_ref_matches(items_to_match, 
+#                                                       num_best_maches = 20,
+#                                                       verbose= False) # after removing duplicates, we'll get less than the targeted num_best_matches
 
 
 

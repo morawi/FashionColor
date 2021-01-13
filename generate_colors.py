@@ -27,21 +27,19 @@ import sys
 
 
 def find_split_points(width_on_wheel=None, split_step = 2):  
-    ''' width_on_wheel is angular width on color wheel '''
-    xx = (9+split_step)/100 if width_on_wheel==None else width_on_wheel 
-    xx = int(np.ceil(100*xx/split_step)*split_step) # correcting xx so that it accepts division by split_step
-    zz= np.arange(-xx, 0, int(xx/split_step)) / 100    
-    theta = list(zz)-np.flipud(zz) 
+    ''' width_on_wheel is angular width on color wheel 
+    inputs--
+        -width_on_wheel: a value between [0,1]
+        
+        '''
+    width_on_wheel = (9+split_step)/100 if width_on_wheel==None else width_on_wheel    
+    theta= width_on_wheel*np.arange(1, split_step+1)/split_step    
     return theta
 
 
-def get_theta(n_step):    
-    n_step = 3 if n_step <3 else n_step # will have problems if n_step less than 3, zero division
-    split_start = 0
-    split_end = 128 #  255
-    stepee= (split_end-split_start)/n_step   
-    theta = np.floor(np.arange(split_start, split_end, stepee))
-    return theta
+def min_array_diff(zz):
+    xx = np.abs([zz[0]-zz[1], zz[0]-zz[2], zz[1]-zz[2]])
+    return np.min(xx)
 
 
 def generate_probability(num_thetas, use_orig_prob, keep_original_color, p0, p_major):
@@ -121,7 +119,7 @@ def color_complementary(rgb_in, theta=0.5, verbose = True): # when theta is 0.5,
     hsv = rgb_to_hsv(rgb_in[0], rgb_in[1], rgb_in[2])
     alpha, beta = get_alpha_beta_if_plane_color(theta, hsv, intensity_low_threshold, verbose)                
     rgb = hsv_to_rgb((hsv[0] + theta) % 1, (hsv[1]+alpha)%1, (hsv[2] + beta)%256)
-    return list(np.ceil(rgb)) # we should in fact use np.ceil for more accuracy
+    return list(np.floor(rgb)) # we should in fact use np.ceil for more accuracy
         
 
 def color_shade(rgb_in, shade=10): # when theta is 0.5, it will give color_complement(a, b, c), a value of theta =1 will gived the same color
@@ -159,10 +157,7 @@ def generate_the_colors(rgb, theta, prob, design_name,
     return design_pattern
 
 
-def min_array_diff(zz):
-    xx = np.abs([zz[0]-zz[1], zz[0]-zz[2], zz[1]-zz[2]])
-    return np.min(xx)
-    
+
 
 def color_purity(rgb_in, theta= 128, verbose=False, purity_threshold = 10): # when theta is 0.5, it will give color_complement(a, b, c), a value of theta =1 will gived the same color
     """ Returns RGB by changing color purity (saturation) of rgb_in
@@ -175,68 +170,88 @@ def color_purity(rgb_in, theta= 128, verbose=False, purity_threshold = 10): # wh
     alpha, beta = get_alpha_beta_if_plane_color(theta, hsv, intensity_low_threshold, verbose)        
     
     if min_diff_rgb>purity_threshold:
-        rgb = hsv_to_rgb(hsv[0], (hsv[1] + theta/255)%1, (hsv[2]+beta)%256)   # we are not using alpha for saturatoin as theta is changing, and no need to change the hue
-    else: # else, this is gray and purity will entirely destroy the color to red or other values, we will use chromatic
-        rgb = hsv_to_rgb(hsv[0], hsv[1], (hsv[2] + theta)%256) # this value will change the monochrom / grayscale of the color    
-    
-   
-    return list(np.ceil(rgb).astype(int))
+        rgb = hsv_to_rgb(hsv[0], theta, (hsv[2]+beta)%256)   # we are not using alpha for saturatoin as theta is changing, and no need to change the hue
+    else: # else, this rgb_in is gray and purity will entirely destroy the color to red or other values, we will use chromatic
+        rgb = hsv_to_rgb(hsv[0], hsv[1], 255*theta) # this value will change the monochrom / grayscale of the color    
+       
+    return list(np.floor(rgb).astype(int))
 
 
-def get_n_split_purity(rgb, perc_upper=None, n_step=0,  
-                              keep_original_color = False, p0=1, use_orig_prob=True):   
-    p_major = 1/ (2*n_step+1)
-    theta = get_theta(n_step)   
-    prob = generate_probability(len(theta), use_orig_prob, keep_original_color, p0, p_major) 
-               
-    color_values = generate_the_colors(rgb, theta, prob, design_name='purity', 
-                             color_function=color_purity, keep_original_color=keep_original_color)
-    
-    return color_values
+
 
 def color_monochromatic(rgb_in, theta= 0.5): 
     """  Returns RGB monochromatic component of rgb_in, by changing the v/value/intensity of hsv
     """
-    hsv = rgb_to_hsv(rgb_in[0], rgb_in[1], rgb_in[2])    
-    # rgb = hsv_to_rgb(hsv[0], hsv[1], theta) 
-    rgb = hsv_to_rgb(hsv[0], hsv[1], (hsv[2] + theta)%256) # this value will change the monochrom / grayscale of the color    
-    return list(np.ceil(rgb)) 
+    hsv = rgb_to_hsv(rgb_in[0], rgb_in[1], rgb_in[2])        
+    rgb = hsv_to_rgb(hsv[0], hsv[1], theta) # this value will change the monochrom / grayscale of the color    
+    return list(np.floor(rgb)) 
 
 
 
-def get_n_split_monochromatic(rgb, perc_upper=None, n_step=0, 
-                              keep_original_color = False, p0=1, use_orig_prob=True):    
-    p_major = 1/ (2*n_step+1)
-    theta = get_theta(n_step)    
-    prob = generate_probability(len(theta), use_orig_prob, keep_original_color, p0, p_major)                
-    return generate_the_colors(rgb, theta, prob, design_name='monochromatic', 
-                               color_function=color_monochromatic, keep_original_color=keep_original_color)
 
 
 def get_n_split_complementary(rgb, perc_upper=None, n_step=0, 
                               keep_original_color = False, p0=1, use_orig_prob=True):
-    
+    n_step=n_step//2 # the number will be doubled by flipping theta later
     if n_step ==0: return generate_the_colors(rgb, theta=[0.5], prob=[p0], design_name= 'complement', 
                                               keep_original_color=keep_original_color) # this only returns the color complement         
-    p_major = 1/ (2*n_step+1)
+    p_major = 1/ (1.5*n_step+1)
     theta = find_split_points(width_on_wheel=perc_upper, split_step = n_step) # width_on_wheel is angular width on color wheel
-    theta = np.append(theta, 0) # this is necessary to get the complement of the exact color, as we are adding 0.5 below
-    theta = [thx+0.5 for thx in theta] # converting to complement                   
+    theta = np.append( theta, -np.flipud(theta) )     
+    theta  = np.append(theta, 0) # np.append(theta, 0) is necessary to get the complement of the exact color, as we are adding 0.5 below    
+    theta = theta+0.5  # converting to complement  
+    theta = np.sort(theta)    # better for vislaization                 
     prob = generate_probability(len(theta), use_orig_prob, keep_original_color, p0, p_major)                
     return generate_the_colors(rgb, theta, prob, design_name='complement', keep_original_color=keep_original_color)
     
 
 def get_n_split_analogous(rgb, perc_upper=None, n_step=0, 
-                              keep_original_color = False, p0=1, use_orig_prob=True):    
+                              keep_original_color = False, p0=1, use_orig_prob=True):  
+    n_step=n_step//2 # the number will be doubled by flipping theta later
     n_step = 1 if n_step ==0 else n_step 
-    p_major = 1/ (2*n_step+1)    
+    p_major = 1/ (1.5*n_step+1)    
     theta = find_split_points(width_on_wheel=perc_upper, split_step = n_step)    
+    theta = np.append( theta, -np.flipud(theta) ) 
+    theta = np.sort(theta)    # better for vislaization                 
     prob = generate_probability(len(theta), use_orig_prob, keep_original_color, p0, p_major)                
     return generate_the_colors(rgb, theta, prob, design_name='analogous', keep_original_color=keep_original_color)
 
+def get_n_split_monochromatic(rgb, perc_upper=None, n_step=0, 
+                              keep_original_color = False, p0=1, use_orig_prob=True):    
+    n_step = 3 if n_step <3 else n_step # will have problems if n_step less than 3, zero division    
+    p_major = 1/ (2*n_step+1)
+    theta = np.floor(255*find_split_points(width_on_wheel=perc_upper, split_step = n_step) )
+    theta = theta[theta>25]    # removing dark shade
+    prob = generate_probability(len(theta), use_orig_prob, keep_original_color, p0, p_major)                
+    return generate_the_colors(rgb, theta, prob, design_name='monochromatic', 
+                               color_function=color_monochromatic, keep_original_color=keep_original_color)
 
+def get_n_split_purity(rgb, perc_upper=None, n_step=0,  
+                              keep_original_color = False, p0=1, use_orig_prob=True):   
+    n_step = 3 if n_step <3 else n_step # will have problems if n_step less than 3, zero division
+    p_major = 1/ (2*n_step+1)
+    theta = find_split_points(width_on_wheel=perc_upper, split_step = n_step)    
+    theta = np.append( theta,  -np.flipud(theta) )
+    hsv = rgb_to_hsv(rgb[0], rgb[1], rgb[2])
+    theta = remove_extremes_from_theta(theta, hsv[1])
+    prob = generate_probability(len(theta), use_orig_prob, keep_original_color, p0, p_major)                
+    color_values = generate_the_colors(rgb, theta, prob, design_name='purity', 
+                             color_function=color_purity, keep_original_color=keep_original_color)
     
+    return color_values  
         
+
+def remove_extremes_from_theta(theta, val):    
+    theta = (val+theta)%1
+    theta = theta[theta<=1]
+    theta = theta[theta>val/2]
+    theta = np.unique(theta)
+    return theta
+    
+    
+    
+    
+    
 
 def generate_pack_of_colors(rgb_val, n_split, p0=1, match_mode = 'complement', perc_upper=None):
     ''' 
@@ -256,13 +271,13 @@ def generate_pack_of_colors(rgb_val, n_split, p0=1, match_mode = 'complement', p
     if match_mode == 'purity':
         color_pack['purity'] = get_n_split_purity(rgb_val,                         
                         n_step=n_split, 
-                        perc_upper = perc_upper,
+                        perc_upper = 0.5, 
                         p0=p0)
         return color_pack
     elif match_mode == 'monochromatic':
         color_pack['monochromatic'] = get_n_split_monochromatic(rgb_val, 
                         n_step=n_split, 
-                        perc_upper = perc_upper,
+                        perc_upper = 1,
                         p0=p0)
         return color_pack
         
@@ -273,7 +288,7 @@ def generate_pack_of_colors(rgb_val, n_split, p0=1, match_mode = 'complement', p
     elif match_mode[:10]=='complement':
         design_pattern_comp= get_n_split_complementary(rgb_val, 
                             n_step=n_split, 
-                            perc_upper = perc_upper,
+                            perc_upper = None,
                             p0=p0) # print(n_split, 'Complement') ## color_pie_chart(design_pattern, fname=fname)
         
         if match_mode == 'complement':
@@ -286,7 +301,7 @@ def generate_pack_of_colors(rgb_val, n_split, p0=1, match_mode = 'complement', p
     elif match_mode[:9] == 'analogous':
         design_pattern_analog = get_n_split_analogous(rgb_val, 
                             n_step=n_split, 
-                            perc_upper = perc_upper,
+                            perc_upper = 0.05,
                             p0=p0) # print(n_split, 'Complement') ## color_pie_chart(design_pattern, fname=fname)
     
         
@@ -315,3 +330,21 @@ def generate_pack_of_colors(rgb_val, n_split, p0=1, match_mode = 'complement', p
 #         rgb = hsv_to_rgb((hsv[0] + theta) % 1, hsv[1], hsv[2])
 #     return list(np.ceil(rgb)) # we should in fact use np.ceil for more accuracy
 #     # return [int(rgb[0]), int(rgb[1]), int(rgb[2])] 
+
+
+# def find_split_points_old(width_on_wheel=None, split_step = 2):  
+#     ''' width_on_wheel is angular width on color wheel '''
+#     xx = (9+split_step)/100 if width_on_wheel==None else width_on_wheel 
+#     xx = int(np.ceil(100*xx/split_step)*split_step) # correcting xx so that it accepts division by split_step
+#     zz= np.arange(-xx, 0, int(xx/split_step)) / 100    
+#     theta = list(zz)-np.flipud(zz) 
+#     return theta
+
+
+# def get_theta(n_step):    
+#     n_step = 3 if n_step <3 else n_step # will have problems if n_step less than 3, zero division
+#     split_start = 0
+#     split_end = 128 #  255
+#     stepee= (split_end-split_start)/n_step   
+#     theta = np.floor(np.arange(split_start, split_end, stepee))
+#     return theta

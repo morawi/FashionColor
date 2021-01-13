@@ -16,6 +16,9 @@ import copy
 from colorsys import rgb_to_hsv
 # from ciecam02 import rgb2jch # , jch2rgb # https://pypi.org/project/ciecam02/
 import sys
+from PIL import Image
+import matplotlib.pyplot as plt
+from file_operations import get_file_name
 
 class ColorMatching():
     ''' Arranges colors of fashion/clothing items into a pandas table. 
@@ -477,7 +480,7 @@ class ColorMatching():
             
     
     def match_engine(self, query_to_match, items_to_match, n_split,  
-                     match_mode):
+                     match_mode, path='C:\MyPrograms\Data\Wardrobe\malrawi'):
         '''  
         query_to_match 
             - "xx.jpg", matches xx () to other items            
@@ -507,7 +510,26 @@ class ColorMatching():
             z.remove(query_to_match)
             matched_items.append(z[0])
         
-        print(query_to_match, 'goes well with',  matched_items[0], 'and', matched_items[1])       
+               
+        plt.figure(clear=True)
+        img1 = Image.open( path+'\\'+query_to_match)
+        plt.title('query image')
+        plt.imshow(img1)
+                
+        plt.figure(clear=True)
+        img2 = Image.open( path+'\\'+matched_items[0])
+        plt.title('matched image')
+        plt.imshow(img2)
+        
+        plt.figure(clear=True)
+        img3 = Image.open( path+'\\'+matched_items[1])
+        plt.title('matched image')
+        plt.imshow(img3)
+        
+        print(query_to_match, 'goes well with',  matched_items[0], 'and', matched_items[1]) 
+       
+        
+        
         
         return result # returning the result for debugging purposes, for now        
 
@@ -560,9 +582,10 @@ class ColorMatching():
         -  monochromatic: changes the value(intensity). better use large n_split with monochromatic, 10 or higher
         - purity: changes color purity (saturation)
 '''     
-match_mode = 'purity'
+match_mode = 'complement'
 n_split = 10
-query_to_match = 'jacket_5.png' 
+query_to_match, path = get_file_name() 
+# query_to_match = 'shirt_5.png' 
 items_to_match = [ 'shirt',  'pants', 'jacket']  # 
 # items_to_match = ['t-shirt',  'pants', 'jacket'] 
 wardrobe_name = 'malrawi'
@@ -571,7 +594,8 @@ col_match_obj = ColorMatching(wardrobe_name=wardrobe_name, catalogue_name= catal
 
 
 # matching a query-item to all the items in the wardrobe
-result_qry_vs_wdb = col_match_obj.match_engine(query_to_match, items_to_match, n_split, match_mode)
+result_qry_vs_wdb = col_match_obj.match_engine(query_to_match, items_to_match, 
+                                               n_split, match_mode, path = path)
 
 
 # matching all vs all items in the wardrobe

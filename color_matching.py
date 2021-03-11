@@ -19,6 +19,7 @@ import sys
 from PIL import Image
 import matplotlib.pyplot as plt
 from file_operations import get_file_name
+import os
 
 class ColorMatching():
     ''' Arranges colors of fashion/clothing items into a pandas table. 
@@ -509,24 +510,22 @@ class ColorMatching():
             z = result[rest_key]['catalogue_name'][0]['matched_items'].copy()
             z.remove(query_to_match)
             matched_items.append(z[0])
-        
                
+                   
         plt.figure(clear=True)
         img1 = Image.open( path+'\\'+query_to_match)
         plt.title('query image')
         plt.imshow(img1)
-                
-        plt.figure(clear=True)
-        img2 = Image.open( path+'\\'+matched_items[0])
-        plt.title('matched image')
-        plt.imshow(img2)
+         
+        for item in matched_items:
+            plt.figure(clear=True)
+            img = Image.open( path+'/'+item)
+            plt.title('matched image')
+            plt.imshow(img)
         
-        plt.figure(clear=True)
-        img3 = Image.open( path+'\\'+matched_items[1])
-        plt.title('matched image')
-        plt.imshow(img3)
         
-        print(query_to_match, 'goes well with',  matched_items[0], 'and', matched_items[1]) 
+        
+        print(query_to_match, 'goes well with',  matched_items) 
        
         
         
@@ -581,17 +580,28 @@ class ColorMatching():
         - opposite: changes to oppoiste 255-rgb
         -  monochromatic: changes the value(intensity). better use large n_split with monochromatic, 10 or higher
         - purity: changes color purity (saturation)
+        
 '''     
 match_mode = 'complement'
 n_split = 10
-query_to_match, path = get_file_name() 
-# query_to_match = 'shirt_5.png' 
-items_to_match = [ 'shirt',  'pants', 'jacket']  # 
-# items_to_match = ['t-shirt',  'pants', 'jacket'] 
-wardrobe_name = 'malrawi'
-catalogue_name = ['ref_clothCoP', None ]# this is the name of the pickle file where the reference is stored
-col_match_obj = ColorMatching(wardrobe_name=wardrobe_name, catalogue_name= catalogue_name[1])
+query_to_match, path = get_file_name()
+# query_to_match = 'sweater_2.png'; path = 'C:\\MyPrograms\\Data\\Wardrobe\\real-malrawi\\'
 
+without_extra_slash = os.path.normpath(path)
+wardrobe_name = os.path.basename(without_extra_slash) # wardrobs = [ 'malrawi',  'real-malrawi']
+
+
+
+if wardrobe_name== 'malrawi':
+    if query_to_match[:5]=='shirt':
+        items_to_match = [ 'shirt',  'pants', 'jacket']  
+    else:
+        items_to_match = ['t-shirt',  'pants', 'jacket'] 
+elif wardrobe_name == 'real-malrawi':
+    items_to_match = [ 'sweater',  'pants', 'jacket', 'shirt']  # 
+
+catalogue_name = ['ref_clothCoP', None ] # this is the name of the pickle file where the reference is stored, if we do not want to use the catalogue then it is None
+col_match_obj = ColorMatching(wardrobe_name=wardrobe_name, catalogue_name= catalogue_name[1])
 
 # matching a query-item to all the items in the wardrobe
 result_qry_vs_wdb = col_match_obj.match_engine(query_to_match, items_to_match, 
@@ -609,9 +619,6 @@ result_qry_vs_wdb = col_match_obj.match_engine(query_to_match, items_to_match,
 # result_wdb_vs_ref = col_match_obj.user_wardrobe_v_ref_matches(items_to_match, 
 #                                                       num_best_maches = 20,
 #                                                       verbose= False) # after removing duplicates, we'll get less than the targeted num_best_matches
-
-
-
 
 
 # def get_colors_from_results(r_obj, result):

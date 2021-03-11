@@ -17,12 +17,13 @@ https://optuna.org/?fbclid=IwAR2lOExJAyfp_5XZnyLh_HBtE8n4Mse4mBu4w4tF4R-SOs4DsxB
 import argparse
 import platform
 from color_extractor import ColorExtractor as color_extractor_obj
-from clothcoparse_dataset import get_clothCoParse_class_names 
+# from clothcoparse_dataset import get_clothCoParse_class_names 
 from prepare_data import get_ClothCoP_images_as_pack, get_images_from_wardrobe
 from color_utils import get_dataset
 from color_table import ColorTable
 import gc
 import time
+from clothing_class_names import get_59_class_names
 
 parser = argparse.ArgumentParser()
 
@@ -100,9 +101,8 @@ def fill_ClothCoP_color_table(cnf, out_file = 'ref_clothCoP'):
 
 def fill_and_build_wardrobe_color_table(cnf, user_name='malrawi'):  
     print('processing wardrobe of' , user_name)
-    class_names_and_colors = get_clothCoParse_class_names()  
-    class_names = list(get_clothCoParse_class_names().keys())
-    color_table_obj = ColorTable(class_names, cnf.max_num_colors)  
+    class_names_and_colors = get_59_class_names()      
+    color_table_obj = ColorTable(list(class_names_and_colors), cnf.max_num_colors)  
     data_pack = get_images_from_wardrobe(user_name= user_name)
     for d_pack in data_pack:
         wardrobe_clothing_colors = color_extractor_obj(cnf,  
@@ -119,27 +119,24 @@ def fill_and_build_wardrobe_color_table(cnf, user_name='malrawi'):
     
 cnf.max_num_colors = 14
 cnf.color_upr_bound = True # when True, extracted colors will be bounded by an upper bound, like, for skin; num of colors will be 1 and for dress will be high, like 17 
-# cnf.num_colors = 12 # we perhapse need to use different set of colors depending on the item ... this is used for clustering if find_no_clusters_method is not usede
 cnf.max_num_colors = cnf.num_colors if cnf.max_num_colors==0 else cnf.max_num_colors # we can reduce the number of clusters according to this upper value, regardless of the number of clusters 
-# cnf.use_quantize = False
 cnf.find_no_clusters_method = 'None' # 'gmm' # {'kmeans', 'gmm', 'bgmm', 'None' } # gmm is the best for now, bgmm=Bayes GMM
 cnf.clustering_method = 'kmeans'  # {'kmeans', 'fcmeans', 'gmm', 'bgmm'}
 cnf.clsuter_1D_method='Diff'  # {'MeanSift', 'Diff', '2nd_fcm', 'None'}: for None, no 1D cluster will be applied
-
 cnf.action = ['build color catalogue', 'build color from user wardrobe', 'test']
-cnf.action = cnf.action[1]
+cnf.action = cnf.action[2]
 
 print(cnf)
 
 
 tic = time.time()
-
+wardrobe_name = 'real-malrawi' #
 if cnf.action == 'build color catalogue': 
     obj = fill_ClothCoP_color_table(cnf, out_file = 'ref_clothCoP.pkl')
 elif cnf.action == 'test':
     extract_colors(cnf)    
 else: 
-    obj_user = fill_and_build_wardrobe_color_table(cnf, user_name='malrawi')
+    obj_user = fill_and_build_wardrobe_color_table(cnf, user_name=wardrobe_name)
     
 
 

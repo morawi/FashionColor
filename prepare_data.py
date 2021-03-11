@@ -6,15 +6,17 @@ Created on Thu Oct 29 15:51:45 2020
 """
 import numpy as np
 from PIL import Image
-from os import listdir
-import cv2
- 
-from os import path 
+from os import listdir, path
+from filter_image import bilateral_meanshift_filter as img_filter, showarray 
 
 
-def remove_image_background(image, mask):
-    '''' Removes the (2D) image background according to the mask,
+def remove_image_background(image, mask, filter_image=True):
+    '''' image: numpy format
+    Removes the (2D) image background according to the mask,
     and returns the  the image as an array of RGB triplets '''
+    if filter_image:
+        image = img_filter(image)  # this would be slow if the image is segmented from the whole outfit      
+        showarray(image)
     mask =  np.concatenate(mask)  # inpus mask is 2D array, output mask is a vector from concatnating the input 2D array
     image_no_bkg = image.reshape(image.shape[0]*image.shape[1], 3)  # reshape to a vector with triplet values as entry, each row has R, G, B values
     image_no_bkg = image_no_bkg[mask] # removing the background via the mask
@@ -36,6 +38,7 @@ def get_ClothCoP_images_as_pack(masks, masked_img, labels, img_name):
     data_pack ['labels'] = labels
     data_pack ['img_name'] = img_name 
     return data_pack
+
         
 
 def get_images_from_wardrobe(path_to_wardrobe= 'C:/MyPrograms/Data/Wardrobe/', user_name='malrawi'):
@@ -50,9 +53,8 @@ def get_images_from_wardrobe(path_to_wardrobe= 'C:/MyPrograms/Data/Wardrobe/', u
         label_val = path.splitext(fname)[0]   # removing the extensoin to get the label
         
         img  = Image.open(path_to_folder+'/'+fname)
-        mask = np.array(img.getchannel('A').convert('1'), dtype=np.bool_) # the alpha band is used to store the mask        
-        img  = np.array(img.convert('RGB'), dtype='uint8')
-        
+        mask = np.array(img.getchannel('A').convert('1'), dtype=np.bool_) # the alpha band is used to store the mask
+        img  = np.array(img.convert('RGB'), dtype='uint8')        
         record['all_images_no_bkg'] = remove_image_background(img, mask = mask)
         record['num_pixels_in_items'] = np.sum(mask)
         record['labels'] = [label_val[:label_val.find('_')] ] # removing what comes after, in the wardrobe, we may have several jackets, so, they are named jacket_1.png, jacket_2.png 

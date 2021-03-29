@@ -36,6 +36,7 @@ class ColorExtractor():
         # computed values           
         self.item={}                          
         self.labels = data_pack['labels']        
+        self.img_name = data_pack['img_name']
         self.find_colors(data_pack)
          
         
@@ -47,7 +48,7 @@ class ColorExtractor():
             
             names_of_colors = [ self.color_names_obj.get_color_name(item) for item in  hex_colors]            
             pixel_counts_labels =[ str(int(np.round(100*item, 2)))+'%' for item in pixel_counts]   # color names from color_names class can be added here
-            print(label_val,': ', names_of_colors)
+            print(label_val, 'in', self.img_name,  ':', names_of_colors)
             plt.figure(figsize = figure_size)
             # plt.suptitle(label_val, fontsize=22)
             plt.pie(100*np.array(pixel_counts), labels = pixel_counts_labels, colors = hex_colors,
@@ -183,7 +184,7 @@ class ColorExtractor():
     def kmm_model(self, image, no_clusters,label_val):
         ''' Runs k-means model and returns the colors and the counts (num of pixels) for each color '''
         clf = KMeans(n_clusters = no_clusters, 
-                     n_jobs=30, 
+                     # n_jobs=30,  # deprecated in Kmeans
                      n_init=24, # 8
                      random_state=1,
                      tol=1e-4, 

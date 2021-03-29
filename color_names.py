@@ -6,7 +6,7 @@ Created on Mon Jul 13 09:21:49 2020
 """
 
 import numpy as np
-from skimage import color
+from skimage import color # conda install scikit-image from https://scikit-image.org/docs/dev/install.html#install-via-pip
 
 
 

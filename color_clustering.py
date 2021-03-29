@@ -54,11 +54,11 @@ def extract_colors(cnf):
     
     # ids  = range(len(dataset))
     # ids = [271]
-    ids = [58]
+    # ids = [58]
     # ids =[192]
     # ids = [323]
     ids = [833] # dress
-    # ids = [121] # white shirt, gray pants, 
+    ids = [121] # white shirt, gray pants, 
     # ids =[0]
     # ids = [94]
     # ids = [907]

@@ -6,12 +6,13 @@ Created on Thu Jun 18 17:45:22 2020
 
 """
 import numpy as np
-from clothcoparse_dataset import ImageDataset, get_clothCoParse_class_names 
+from clothcoparse_dataset import ImageDataset 
 from sklearn.cluster import MeanShift, estimate_bandwidth
 import cv2
 from collections import Counter
-from fcmeans import FCM
+from fcmeans import FCM # https://pypi.org/project/fuzzy-c-means/
 from PIL import Image
+from clothing_class_names import get_59_class_names
 
 # from modanet_dataset import ModanetDataset # this is becuase PyCocoTools is killing matplotlib backend
 # https://github.com/cocodataset/cocoapi/issues/433
@@ -23,11 +24,13 @@ def RGB2HEX(rgb):
 
 def get_dataset(opt):    
     if opt.dataset_name=='ClothCoParse':
-        dataset = ImageDataset(root= "../data/%s" % opt.dataset_name,                                 
+        class_names_and_colors = get_59_class_names()
+        dataset = ImageDataset(root= "../data/%s" % opt.dataset_name, 
+                               class_names_and_colors= class_names_and_colors,                                
                                 mode="train",                          
                                 HPC_run=opt.HPC_run,                                 
                             )
-        class_names_and_colors = get_clothCoParse_class_names()
+        
     
     # else:
     #     dataset = ModanetDataset("../data/%s" % opt.dataset_name, 

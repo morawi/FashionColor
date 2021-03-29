@@ -7,11 +7,13 @@ Created on Wed Mar 10 14:09:49 2021
 
 
 import cv2
-
 import numpy as np
 import PIL.Image
 from io import BytesIO
 import IPython.display
+
+
+
 
 def showarray(a, fmt='png'):
     a = np.uint8(a)
@@ -24,10 +26,12 @@ def bilateral_meanshift_filter(image, mode='RGB'):
     # input: img in RGB mode as numpy uint8 array
     if mode != 'RGB': image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    img, box = extract_image(image) # extract the image if it is embbeded in a large zero mask, this will speedup the implementation if we have images embbeded into larger zero-value ones, which is the case in semantic segmentaion
+    img, box = extract_image(image) # sppedup and accuracy: extract the image if it is embbeded in a large zero mask, this will speedup the implementation if we have images embbeded into larger zero-value ones, which is the case in semantic segmentaion
     mask = img>0 # will be used to mask out edge distortions due to filtering
-        
-    img = cv2.bilateralFilter(src=img, d=-1, sigmaColor=100, sigmaSpace=15)
+    
+    # img = cv2.bilateralFilter(src=img, d=-1, sigmaColor=100, sigmaSpace=15)
+    img = cv2.bilateralFilter(img,9,75,75)
+    
     '''
          Gaussian bilateral blur, equivalent to microdermabrasion
          Src: original image
@@ -36,7 +40,7 @@ def bilateral_meanshift_filter(image, mode='RGB'):
          sigmaSpace: the standard deviation of the coordinate space (pixel units), generally the smaller the better
     '''
         
-    img = cv2.pyrMeanShiftFiltering(src=img, sp=15, sr=20 )# cv2.pyrMeanShiftFiltering(src=img, sp=15, sr=20)
+    # img = cv2.pyrMeanShiftFiltering(src=img, sp=15, sr=20 )# cv2.pyrMeanShiftFiltering(src=img, sp=15, sr=20)
     '''
          Mean offset filter processing, want to be the operation of turning pictures into oil painting
          Src: original image
@@ -61,3 +65,8 @@ def extract_image(image):
     
     return image[box['ymin']:box['ymax'],box['xmin']:box['xmax']], box
     
+
+        
+        
+        
+        

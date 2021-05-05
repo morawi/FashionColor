@@ -10,17 +10,26 @@ import scipy.signal as sc
 import numpy as np
 import torch
 
+# import platform
+# if platform.system()=='Windows':
+#     from numpy import histogramdd as histogramdd        
+# else: # Linux
+#     from jax.numpy import histogramdd as histogramdd # jax cannot be installed on Windows
 
-def colors_via_3d_hist(image_no_bkg):
+import torchist 
+
+
+def colors_via_3d_hist(image_no_bkg, verbose = False):
     ''' predicts the number of colors from the image RGB histogram        
     '''
     
     num_points_to_search_tail_peaks = 16 # to check if the left or the right tails have higher values than the detected peaks and then adding them to the peak list
     hist_as_1D, x_bins = get_3D_histogram(image_no_bkg)        
-    zz, idx_of_aa = smooth_filter_1D(hist_as_1D) # smooth the histogram, zz is compressed, hence we need to the original idxs of aa   
+    zz, idx_of_aa = smooth_filter_1D(hist_as_1D, verbose=verbose) # smooth the histogram, zz is compressed, hence we need to the original idxs of aa   
     max_peaks = find_the_peaks(zz) # find peaks
     max_peaks = add_tails_to_peak(zz, hist_as_1D, max_peaks, num_points_to_search_tail_peaks) # adding the tails if they are small
     max_peaks = idx_of_aa[max_peaks]
+    
     print('num peaks without augmentation:', len(max_peaks), max_peaks)
     max_peaks = add_extra_peaks(max_peaks, x_bins)
     print('num peaks:', len(max_peaks), max_peaks)
@@ -29,6 +38,7 @@ def colors_via_3d_hist(image_no_bkg):
     # print('peaked colors', peaked_colors)
     
     return peaked_colors
+
     
 def add_extra_peaks(max_peaks, x_bins):
     ''' randomly adding extra peaks to the discovered ones '''
@@ -37,19 +47,18 @@ def add_extra_peaks(max_peaks, x_bins):
     peaks_to_add = np.random.randint(0, len(x_bins)-1, num_colors_to_add) 
     max_peaks = np.sort( np.concatenate((max_peaks, peaks_to_add)) )
     return max_peaks
+
     
 def get_3D_histogram(image_no_bkg):
-    # Build the histogram
-    H, edges = np.histogramdd(image_no_bkg, bins=255) # 255 is for 8-bit per pixel images, if it has higher pixels, this should be changed
-    xx= np.where(H)    
-    x_bins = np.array(list(zip(xx[0], xx[1], xx[2]))) # list(zip(xx[0], xx[1], xx[2]))
-    
-    # convert the histogram into a 1D vector, then normalize it
-    hist_as_1D = np.array([])
-    for i,j,k in x_bins: hist_as_1D = np.append(hist_as_1D, H[i][j][k])        
-    hist_as_1D = hist_as_1D/max(hist_as_1D)
+    # Build the histogram    
+    H, _ = np.histogramdd(image_no_bkg, bins=255) # 255 is for 8-bit per pixel images, if it has higher pixels, this should be changed
+    xx= np.where(H)        
+    x_bins = np.hstack((xx[0].reshape(-1,1), xx[1].reshape(-1,1), xx[2].reshape(-1,1)))    
+    hist_as_1D = H[xx]  # convert the histogram into a 1D vector  
+    hist_as_1D = hist_as_1D/max(hist_as_1D) # then normalize it
     
     return hist_as_1D, x_bins
+
     
 def convolve_it_numpy(vv, N, verbose=False):
     for n in N:
@@ -121,6 +130,7 @@ def find_the_peaks(zz, peak_priminence_threshold = 1, verbose=True):
     max_peaks = max_peaks[salient_peaks>=peak_priminence_threshold]
     
     if verbose:
+        print('----------')
         print("promin X widths", salient_peaks[salient_peaks>peak_priminence_threshold].astype(int) )
         
     return max_peaks

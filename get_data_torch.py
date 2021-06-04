@@ -2,7 +2,7 @@
 """
 Created on Tue Apr 20 15:25:59 2021
 
-@author: malrawi
+@author: malrawi 
 """
 
 import torchvision

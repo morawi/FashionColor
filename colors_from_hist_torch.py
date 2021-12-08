@@ -212,6 +212,12 @@ def add_tails_to_peak(zz, main_peak, max_peaks, num_points_to_search_tail_peaks)
                 
     return max_peaks
 
+
+
+
+
+
+
 # # giving bad results https://dsp.stackexchange.com/questions/74772/how-to-check-if-a-signal-is-mainly-composed-of-a-few-impulse-peaks
 # def find_flattness(x):
 #     N= len(4*x)

@@ -16,25 +16,42 @@ import torch
 # else: # Linux
 #     from jax.numpy import histogramdd as histogramdd # jax cannot be installed on Windows
 
-import torchist 
+# import torchist 
 
 
-def colors_via_3d_hist(image_no_bkg, verbose = False):
-    ''' predicts the number of colors from the image RGB histogram        
+def colors_via_3d_hist(image_no_bkg, verbose = False, spike_threshold = 0.5,
+                       max_num_distict_peaks = 64):
+    ''' predicts the number of colors from the image RGB histogram            
+    spike_threshold = .5 # no of points > 0.5*std would be useful, if the number is 
+
     '''
     
-    num_points_to_search_tail_peaks = 16 # to check if the left or the right tails have higher values than the detected peaks and then adding them to the peak list
-    hist_as_1D, x_bins = get_3D_histogram(image_no_bkg)        
-    zz, idx_of_aa = smooth_filter_1D(hist_as_1D, verbose=verbose) # smooth the histogram, zz is compressed, hence we need to the original idxs of aa   
-    max_peaks = find_the_peaks(zz) # find peaks
-    max_peaks = add_tails_to_peak(zz, hist_as_1D, max_peaks, num_points_to_search_tail_peaks) # adding the tails if they are small
-    max_peaks = idx_of_aa[max_peaks]
+    verbose = True
+    if verbose: print('\n\n ------- Processing ... -------------------------------- ')
+       
     
-    print('num peaks without augmentation:', len(max_peaks), max_peaks)
-    max_peaks = add_extra_peaks(max_peaks, x_bins)
+    num_points_to_search_tail_peaks = 16 # to check if the left or the right tails have higher values than the detected peaks and then adding them to the peak list
+    hist_as_1D, x_bins = get_3D_histogram(image_no_bkg)    
+    if verbose: plt.show(); plt.figure; plt.plot(hist_as_1D); plt.show()
+
+    spike_vec = hist_as_1D>(np.std(hist_as_1D))
+    n_spikes = sum(spike_vec*spike_threshold)
+    if verbose: print('# pts gt std/2=', n_spikes)
+    
+    if n_spikes < max_num_distict_peaks:  
+        max_peaks = np.where(spike_vec)[0] # Distictive spikes ... tuple, hence [0]
+        
+    else:            
+        zz, idx_of_aa = smooth_filter_1D(hist_as_1D, verbose=verbose) # smooth the histogram, zz is compressed, hence we need to the original idxs of aa   
+        max_peaks = find_the_peaks(zz) # find peaks
+        max_peaks = add_tails_to_peak(zz, hist_as_1D, max_peaks, num_points_to_search_tail_peaks) # adding the tails if they are small
+        max_peaks = idx_of_aa[max_peaks]    
+        print('num peaks without augmentation:', len(max_peaks), max_peaks)
+        max_peaks = add_extra_peaks(max_peaks, x_bins)
+    
     print('num peaks:', len(max_peaks), max_peaks)
     
-    peaked_colors = np.take(x_bins, max_peaks, axis=0)   # these can either be used directly, or to seed kmeans or GMM
+    peaked_colors = x_bins[max_peaks]  # peaked_colors = np.take(x_bins, max_peaks, axis=0)   # these can either be used directly, or to seed kmeans or GMM
     # print('peaked colors', peaked_colors)
     
     return peaked_colors
@@ -92,8 +109,10 @@ def convolve_it_torch(vv, N):
 def smooth_filter_1D(aa, reduce_peaks=True, use_torch=False, verbose = True):
     filter_bank_bins=[500]
     
-    if verbose: plt.plot(aa); plt.show()
-        
+     
+    # verbose=True
+    
+            
     if reduce_peaks: # if True, it only uses the peaks of the data, thus, reducint the curve profile
         idx_of_aa = sc.find_peaks(aa)[0]
         aa = aa[idx_of_aa]; print('only elite peaks')
@@ -111,7 +130,7 @@ def smooth_filter_1D(aa, reduce_peaks=True, use_torch=False, verbose = True):
     zz = filter_to_use(aa.copy(), N)           
     zz= zz/max(zz) # normalize to 1    
     
-    if verbose: plt.show(); plt.figure;plt.plot(aa); plt.plot(zz); plt.show()
+    if verbose: plt.figure; plt.plot(aa); plt.plot(zz); plt.show()
     
     return zz, idx_of_aa
    
